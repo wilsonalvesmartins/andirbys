@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Andirby's Pizzaria & Esfiharia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area {
+                position: absolute; left: 0; top: 0; width: 80mm;
+                font-family: monospace; font-size: 14px; color: black;
+                padding: 5mm; margin: 0;
+            }
+            .no-print { display: none !important; }
+        }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #b91c1c; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Cores da Andirby's */
+        .bg-andirby-red { background-color: #990000; }
+        .text-andirby-yellow { color: #FFCC00; }
+        .bg-andirby-yellow { background-color: #FFCC00; }
+        .hover-bg-andirby-red:hover { background-color: #7a0000; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <nav class="bg-andirby-red text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-2xl font-black text-andirby-yellow tracking-wide flex items-center gap-2 cursor-pointer" onclick="navigate('menu')">
+                🍕 Andirby's
+            </h1>
+            <div id="nav-cart" class="relative cursor-pointer bg-red-900 p-2 rounded-full hover:bg-red-950 transition" onclick="navigate('cart')">
+                🛒
+                <span id="cart-count" class="absolute -top-1 -right-1 bg-andirby-yellow text-black font-bold text-xs rounded-full h-5 w-5 flex items-center justify-center shadow">0</span>
+            </div>
+        </div>
+    </nav>
+
+    <main id="app" class="flex-grow max-w-4xl mx-auto w-full px-4 py-6"></main>
+
+    <footer class="bg-gray-900 text-gray-400 py-6 text-center mt-auto border-t-4 border-andirby-red">
+        <p class="text-sm text-andirby-yellow font-bold">Andirby's Pizzaria & Esfiharia</p>
+        <p class="text-xs mt-1">&copy; 2026. Todos os direitos reservados.</p>
+        <span onclick="promptAdmin()" class="inline-block mt-2 cursor-pointer opacity-10 hover:opacity-100 transition-opacity" title="Área Restrita">🔒</span>
+    </footer>
+
+    <div id="print-area" class="hidden"></div>
+
+    <script>
+        // --- DADOS DO CARDÁPIO (SABORES) ---
+        const FLAVORS = {
+            salgadas: ["Andirby's", "Atum", "Alho", "Bauru", "Calabresa", "Calabresa do Chef", "Caliente", "Da Nona", "Da Sogra", "Frango com Catupiry", "Frango com Bacon", "Hollywood", "Hulk", "Damep", "Lombinho", "Marguerita", "Mussarela", "Portuguesa", "Quatro Queijos"],
+            doces: ["Chocolate ao leite", "Banana e Canela", "Romeu e Julieta"],
+            esfihas: ["Alho", "Bacon", "Carne", "Calabresa", "Frango c/ Catupiry", "Frango c/ Cheddar", "Presunto e Queijo", "Banana c/ Canela", "Chocolate ao leite", "Chocolate Branco", "Romeu e Julieta"]
+        };
+
+        const state = {
+            view: 'menu',
+            items: [],
+            settings: { delivery_fee: 0, webhook_url: '' },
+            cart: [],
+            userData: { whatsapp: '', name: '', address: '' },
+            adminToken: localStorage.getItem('adminToken') || null,
+            adminOrders: [],
+            modalItem: null // Guarda o item atual sendo configurado no modal
+        };
+
+        async function init() {
+            await fetchMenuData();
+            render();
+        }
+
+        async function fetchMenuData() {
+            try {
+                const res = await fetch('/api/menu');
+                const data = await res.json();
+                state.items = data.items;
+                state.settings.delivery_fee = parseFloat(data.settings.delivery_fee) || 0;
+                state.settings.webhook_url = data.settings.webhook_url || '';
+            } catch (e) { showToast("Erro de conexão"); }
+        }
+
+        function navigate(view) {
+            state.view = view;
+            document.getElementById('nav-cart').style.display = (view === 'admin_orders' || view === 'admin_menu') ? 'none' : 'block';
+            window.scrollTo(0, 0);
+            render();
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            document.getElementById('cart-count').innerText = state.cart.length;
+
+            if (state.view === 'menu') app.innerHTML = renderMenu();
+            else if (state.view === 'cart') app.innerHTML = renderCart();
+            else if (state.view === 'checkout') app.innerHTML = renderCheckout();
+            else if (state.view === 'admin_orders') { app.innerHTML = '<div class="loader mx-auto"></div>'; loadAdminOrders(); }
+            else if (state.view === 'admin_menu') app.innerHTML = renderAdminMenu();
+        }
+
+        function formatMoney(value) { return `R$ ${parseFloat(value).toFixed(2).replace('.', ',')}`; }
+
+        function renderMenu() {
+            let html = `<div class="mb-6"><h2 class="text-3xl font-black text-andirby-red">Cardápio</h2><p class="text-gray-500 font-bold">Faça seu pedido conosco!</p></div>`;
+            const categories = [...new Set(state.items.map(i => i.category))];
+            
+            categories.forEach(cat => {
+                html += `<h3 class="text-xl font-bold text-andirby-red mt-8 mb-4 border-b-2 border-red-200 pb-2 flex items-center gap-2">🍕 ${cat}</h3>`;
+                html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">`;
+                
+                const catItems = state.items.filter(i => i.category === cat);
+                catItems.forEach(item => {
+                    const isConfigurable = item.category.includes('Pizzas') || item.category.includes('Esfihas');
+                    html += `
+                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex justify-between items-center hover:shadow-md transition cursor-pointer" onclick="${isConfigurable ? `openConfigModal(${item.id})` : `addSimpleItem(${item.id})`}">
+                            <div>
+                                <h4 class="font-bold text-gray-800">${item.name}</h4>
+                                <p class="text-andirby-red font-bold mt-1">${formatMoney(item.price)}</p>
+                            </div>
+                            <button class="bg-andirby-yellow text-black px-3 py-2 rounded-lg font-bold hover:bg-yellow-500 transition shadow">
+                                ${isConfigurable ? 'Montar' : '➕'}
+                            </button>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            });
+
+            // Container do Modal
+            html += `
+                <div id="config-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden z-50 flex items-center justify-center p-4">
+                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col border-t-8 border-andirby-red">
+                        <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-lg">
+                            <div>
+                                <h3 class="text-lg font-bold text-andirby-red" id="modal-title">Configurar</h3>
+                                <p class="text-sm text-gray-500 font-bold" id="modal-subtitle">Subtítulo</p>
+                            </div>
+                            <button onclick="closeModal()" class="text-gray-400 hover:text-red-600 text-3xl font-black">&times;</button>
+                        </div>
+                        <div class="p-4 overflow-y-auto flex-grow" id="modal-body"></div>
+                        <div class="p-4 border-t bg-gray-50" id="modal-footer"></div>
+                    </div>
+                </div>
+            `;
+            return html;
+        }
+
+        // --- LÓGICA DO MODAL DE SABORES ---
+        let modalSelections = []; 
+        let modalMax = 1;
+
+        function openConfigModal(id) {
+            const item = state.items.find(i => i.id === id);
+            state.modalItem = item;
+            modalSelections = [];
+            
+            document.getElementById('modal-title').innerText = item.category;
+            document.getElementById('modal-subtitle').innerText = item.name + " - " + formatMoney(item.price);
+            
+            const body = document.getElementById('modal-body');
+            
+            if (item.category.includes('Pizzas')) {
+                // Descobrir quantos sabores
+                modalMax = 1;
+                if(item.name.includes('2 Sabores')) modalMax = 2;
+                if(item.name.includes('3 Sabores')) modalMax = 3;
+                
+                let html = `<p class="mb-4 text-sm bg-yellow-100 p-2 rounded text-yellow-800 font-bold">Escolha até ${modalMax} sabor(es):</p>`;
+                
+                // Listar Salgadas
+                html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Salgadas</h4><div class="space-y-2">`;
+                FLAVORS.salgadas.forEach(f => {
+                    html += `
+                        <label class="flex items-center p-2 border rounded cursor-pointer hover:bg-gray-50" onclick="togglePizzaFlavor('${f}')">
+                            <input type="checkbox" id="chk_${f.replace(/\s/g,'')}" class="w-5 h-5 text-red-600 mr-3 pointer-events-none">
+                            <span class="font-bold text-gray-700">${f}</span>
+                        </label>`;
+                });
+                html += `</div>`;
+                
+                // Listar Doces
+                html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Doces</h4><div class="space-y-2">`;
+                FLAVORS.doces.forEach(f => {
+                    html += `
+                        <label class="flex items-center p-2 border rounded cursor-pointer hover:bg-gray-50" onclick="togglePizzaFlavor('${f}')">
+                            <input type="checkbox" id="chk_${f.replace(/\s/g,'')}" class="w-5 h-5 text-red-600 mr-3 pointer-events-none">
+                            <span class="font-bold text-gray-700">${f}</span>
+                        </label>`;
+                });
+                html += `</div>`;
+                
+                body.innerHTML = html;
+                renderModalFooterPizza();
+
+            } else if (item.category.includes('Esfihas')) {
+                modalMax = 1;
+                if(item.name.includes('10')) modalMax = 10;
+                if(item.name.includes('20')) modalMax = 20;
+
+                // Para Esfihas, transformamos modalSelections em um dicionário { Sabor: quantidade }
+                modalSelections = {};
+                FLAVORS.esfihas.forEach(f => modalSelections[f] = 0);
+
+                let html = `<p class="mb-4 text-sm bg-yellow-100 p-2 rounded text-yellow-800 font-bold" id="esfiha-counter">Faltam escolher: ${modalMax}</p>`;
+                html += `<div class="space-y-3">`;
+                FLAVORS.esfihas.forEach(f => {
+                    html += `
+                        <div class="flex justify-between items-center p-2 border rounded bg-white">
+                            <span class="font-bold text-gray-700">${f}</span>
+                            <div class="flex items-center gap-3">
+                                <button onclick="changeEsfihaQty('${f}', -1)" class="w-8 h-8 bg-gray-200 rounded font-bold text-xl flex items-center justify-center">-</button>
+                                <span id="qty_${f.replace(/\s/g,'')}" class="font-bold w-4 text-center">0</span>
+                                <button onclick="changeEsfihaQty('${f}', 1)" class="w-8 h-8 bg-andirby-yellow rounded font-bold text-xl flex items-center justify-center">+</button>
+                            </div>
+                        </div>`;
+                });
+                html += `</div>`;
+                body.innerHTML = html;
+                renderModalFooterEsfiha();
+            }
+
+            document.getElementById('config-modal').classList.remove('hidden');
+        }
+
+        function togglePizzaFlavor(flavor) {
+            const idx = modalSelections.indexOf(flavor);
+            if (idx > -1) {
+                modalSelections.splice(idx, 1);
+            } else {
+                if (modalSelections.length < modalMax) {
+                    modalSelections.push(flavor);
+                } else {
+                    showToast(`Máximo de ${modalMax} sabores permitidos!`);
+                }
+            }
+            // Atualizar UI dos checkboxes
+            [...FLAVORS.salgadas, ...FLAVORS.doces].forEach(f => {
+                const chk = document.getElementById(`chk_${f.replace(/\s/g,'')}`);
+                if(chk) chk.checked = modalSelections.includes(f);
+            });
+            renderModalFooterPizza();
+        }
+
+        function renderModalFooterPizza() {
+            const valid = modalSelections.length > 0 && modalSelections.length <= modalMax;
+            const btn = `
+                <button onclick="confirmModalItem()" class="w-full py-3 rounded-lg font-bold text-white transition ${valid ? 'bg-andirby-red hover-bg-andirby-red' : 'bg-gray-400 cursor-not-allowed'}" ${!valid ? 'disabled' : ''}>
+                    Adicionar ao Carrinho (${modalSelections.length}/${modalMax})
+                </button>`;
+            document.getElementById('modal-footer').innerHTML = btn;
+        }
+
+        function changeEsfihaQty(flavor, diff) {
+            const currentTotal = Object.values(modalSelections).reduce((a, b) => a + b, 0);
+            if (diff > 0 && currentTotal >= modalMax) {
+                showToast(`Limite de ${modalMax} atingido!`);
+                return;
+            }
+            if (diff < 0 && modalSelections[flavor] <= 0) return;
+
+            modalSelections[flavor] += diff;
+            document.getElementById(`qty_${flavor.replace(/\s/g,'')}`).innerText = modalSelections[flavor];
+            
+            const newTotal = Object.values(modalSelections).reduce((a, b) => a + b, 0);
+            document.getElementById('esfiha-counter').innerText = `Faltam escolher: ${modalMax - newTotal}`;
+            renderModalFooterEsfiha();
+        }
+
+        function renderModalFooterEsfiha() {
+            const currentTotal = Object.values(modalSelections).reduce((a, b) => a + b, 0);
+            const valid = currentTotal === modalMax;
+            const btn = `
+                <button onclick="confirmModalItem()" class="w-full py-3 rounded-lg font-black text-black transition ${valid ? 'bg-andirby-yellow hover:bg-yellow-500 shadow-lg' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}" ${!valid ? 'disabled' : ''}>
+                    Confirmar Combo
+                </button>`;
+            document.getElementById('modal-footer').innerHTML = btn;
+        }
+
+        function confirmModalItem() {
+            let details = "";
+            if (state.modalItem.category.includes('Pizzas')) {
+                details = modalSelections.join(' + ');
+            } else if (state.modalItem.category.includes('Esfihas')) {
+                const picked = [];
+                for(let f in modalSelections) {
+                    if(modalSelections[f] > 0) picked.push(`${modalSelections[f]}x ${f}`);
+                }
+                details = picked.join(', ');
+            }
+
+            state.cart.push({
+                type: 'configured',
+                name: `${state.modalItem.category} - ${state.modalItem.name}`,
+                details: details,
+                price: state.modalItem.price
+            });
+            
+            closeModal();
+            render();
+            showToast("Item adicionado com sucesso!");
+        }
+
+        function closeModal() {
+            document.getElementById('config-modal').classList.add('hidden');
+        }
+
+        function addSimpleItem(id) {
+            const item = state.items.find(i => i.id === id);
+            state.cart.push({ type: 'simple', name: item.name, details: item.category, price: item.price });
+            render();
+            showToast(`${item.name} adicionado!`);
+        }
+
+        function removeFromCart(index) {
+            state.cart.splice(index, 1);
+            render();
+        }
+
+        function renderCart() {
+            if (state.cart.length === 0) {
+                return `
+                    <div class="text-center py-12">
+                        <div class="text-5xl mb-4">🛒</div>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2">Carrinho Vazio</h2>
+                        <button onclick="navigate('menu')" class="mt-4 text-andirby-red font-bold hover:underline">Voltar ao Cardápio</button>
+                    </div>`;
+            }
+
+            let html = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-black text-andirby-red">Seu Pedido</h2>
+                    <button onclick="navigate('menu')" class="text-gray-500 hover:text-black font-bold">Continuar comprando</button>
+                </div>
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6 space-y-4">
+            `;
+
+            let subtotal = 0;
+            state.cart.forEach((item, index) => {
+                subtotal += item.price;
+                html += `
+                    <div class="flex justify-between items-center border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                        <div class="pr-4">
+                            <h4 class="font-bold text-gray-800">${item.name}</h4>
+                            <p class="text-sm text-gray-500 italic">${item.details}</p>
+                            <p class="text-andirby-red font-bold">${formatMoney(item.price)}</p>
+                        </div>
+                        <button onclick="removeFromCart(${index})" class="text-gray-400 hover:text-red-600 text-xl">🗑️</button>
+                    </div>`;
+            });
+
+            html += `
+                </div>
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                    <div class="flex justify-between items-center font-bold text-lg mb-4">
+                        <span>Subtotal:</span>
+                        <span class="text-andirby-red">${formatMoney(subtotal)}</span>
+                    </div>
+                    <button onclick="navigate('checkout')" class="w-full bg-green-600 text-white py-4 rounded-lg font-black text-lg hover:bg-green-700 transition shadow-lg">
+                        Finalizar Pedido
+                    </button>
+                </div>
+            `;
+            return html;
+        }
+
+        let checkoutState = { type: 'delivery' };
+
+        function renderCheckout() {
+            let subtotal = state.cart.reduce((acc, item) => acc + item.price, 0);
+            let total = checkoutState.type === 'delivery' ? subtotal + state.settings.delivery_fee : subtotal;
+
+            return `
+                <h2 class="text-2xl font-black text-andirby-red mb-6">Finalização</h2>
+                
+                <form id="checkout-form" class="space-y-6" onsubmit="submitOrder(event)">
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 border-t-4 border-yellow-400">
+                        <h3 class="font-black text-lg mb-4">Seus Dados</h3>
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">WhatsApp (com DDD)</label>
+                            <input type="tel" id="whatsapp" required class="w-full border-2 border-gray-300 rounded-lg p-3 focus:border-andirby-red outline-none" 
+                                placeholder="Ex: 16999999999" value="${state.userData.whatsapp}" onblur="fetchUserByPhone(this.value)">
+                            <p class="text-xs text-gray-500 mt-1">Preencheremos o restante se você já for cliente!</p>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Nome Completo</label>
+                            <input type="text" id="name" required class="w-full border-2 border-gray-300 rounded-lg p-3 outline-none focus:border-andirby-red" value="${state.userData.name}">
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                        <h3 class="font-black text-lg mb-4">Retirada ou Entrega?</h3>
+                        <div class="flex gap-4 mb-6">
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="orderType" value="delivery" class="hidden peer" ${checkoutState.type === 'delivery' ? 'checked' : ''} onchange="updateCheckoutType('delivery')">
+                                <div class="text-center p-3 border-2 rounded-lg peer-checked:border-andirby-red peer-checked:bg-red-50 font-bold transition">🛵 Entrega</div>
+                            </label>
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="orderType" value="pickup" class="hidden peer" ${checkoutState.type === 'pickup' ? 'checked' : ''} onchange="updateCheckoutType('pickup')">
+                                <div class="text-center p-3 border-2 rounded-lg peer-checked:border-andirby-red peer-checked:bg-red-50 font-bold transition">🏪 Retirar</div>
+                            </label>
+                        </div>
+                        <div id="address-container" class="${checkoutState.type === 'pickup' ? 'hidden' : ''}">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Endereço Completo</label>
+                            <textarea id="address" rows="3" class="w-full border-2 border-gray-300 rounded-lg p-3 outline-none focus:border-andirby-red" ${checkoutState.type === 'delivery' ? 'required' : ''}>${state.userData.address}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-900 text-white rounded-lg shadow-sm p-5 border-l-4 border-andirby-yellow">
+                        <h3 class="font-black text-lg mb-4 border-b border-gray-700 pb-2 text-andirby-yellow">Resumo</h3>
+                        <div class="flex justify-between mb-2 text-gray-300">
+                            <span>Subtotal:</span><span>${formatMoney(subtotal)}</span>
+                        </div>
+                        ${checkoutState.type === 'delivery' ? `
+                        <div class="flex justify-between mb-2 text-gray-300">
+                            <span>Taxa de Entrega:</span><span>${formatMoney(state.settings.delivery_fee)}</span>
+                        </div>` : ''}
+                        <div class="flex justify-between mt-4 text-2xl font-black text-green-400">
+                            <span>Total:</span><span>${formatMoney(total)}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button type="button" onclick="navigate('cart')" class="bg-gray-200 text-gray-800 py-4 px-6 rounded-lg font-bold hover:bg-gray-300">Voltar</button>
+                        <button type="submit" class="flex-1 bg-green-600 text-white py-4 rounded-lg font-black text-lg hover:bg-green-700 transition shadow-lg">✅ Confirmar Pedido</button>
+                    </div>
+                </form>
+            `;
+        }
+
+        async function fetchUserByPhone(phone) {
+            const clean = phone.replace(/\D/g, '');
+            if(clean.length < 10) return;
+            try {
+                const res = await fetch(`/api/users/${clean}`);
+                const user = await res.json();
+                if(user.name) {
+                    document.getElementById('name').value = user.name; state.userData.name = user.name;
+                    document.getElementById('address').value = user.address || ''; state.userData.address = user.address || '';
+                    showToast("Cliente reconhecido!");
+                }
+            } catch(e) {}
+        }
+
+        function updateCheckoutType(type) { checkoutState.type = type; render(); }
+
+        async function submitOrder(e) {
+            e.preventDefault();
+            const payload = {
+                whatsapp: document.getElementById('whatsapp').value.replace(/\D/g, ''),
+                name: document.getElementById('name').value,
+                address: document.getElementById('address') ? document.getElementById('address').value : '',
+                type: checkoutState.type === 'delivery' ? 'Entrega' : 'Retirada',
+                items: state.cart,
+                subtotal: state.cart.reduce((a, i) => a + i.price, 0),
+                delivery_fee: checkoutState.type === 'delivery' ? state.settings.delivery_fee : 0,
+            };
+            payload.total = payload.subtotal + payload.delivery_fee;
+
+            try {
+                const res = await fetch('/api/orders', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+                if(res.ok) {
+                    state.cart = []; state.userData = {whatsapp: payload.whatsapp, name: payload.name, address: payload.address};
+                    document.getElementById('app').innerHTML = `
+                        <div class="text-center py-16">
+                            <h2 class="text-4xl font-black text-green-600 mb-4">Pedido Confirmado! 🎉</h2>
+                            <p class="text-gray-600 mb-8 font-bold">O Andirby's já está preparando as delícias.</p>
+                            <button onclick="navigate('menu')" class="bg-andirby-red text-white px-6 py-3 rounded-lg font-bold hover-bg-andirby-red">Voltar ao Início</button>
+                        </div>`;
+                } else alert("Erro ao enviar pedido.");
+            } catch(err) { alert("Erro de conexão."); }
+        }
+
+        // --- PAINEL ADMIN ---
+        function promptAdmin() {
+            const pwd = prompt("Senha:");
+            if(pwd === "andirbys2026") {
+                state.adminToken = "Bearer andirbys2026";
+                localStorage.setItem('adminToken', state.adminToken);
+                navigate('admin_orders');
+            } else if(pwd) alert("Incorreta!");
+        }
+
+        function authHeaders() { return { 'Authorization': state.adminToken, 'Content-Type': 'application/json' }; }
+
+        async function loadAdminOrders() {
+            try {
+                const res = await fetch('/api/admin/orders', { headers: authHeaders() });
+                if(res.status === 401) { navigate('menu'); return; }
+                state.adminOrders = await res.json();
+                app.innerHTML = renderAdminOrders();
+            } catch(e) { navigate('menu'); }
+        }
+
+        function renderAdminNav() {
+            return `
+                <div class="flex gap-4 mb-6 border-b pb-4">
+                    <button onclick="navigate('admin_orders')" class="${state.view==='admin_orders'?'font-black text-andirby-red border-b-4 border-andirby-red':'text-gray-500 font-bold'} pb-1">Pedidos</button>
+                    <button onclick="navigate('admin_menu')" class="${state.view==='admin_menu'?'font-black text-andirby-red border-b-4 border-andirby-red':'text-gray-500 font-bold'} pb-1">Configurações</button>
+                    <button onclick="navigate('menu')" class="ml-auto text-sm bg-gray-800 text-white px-3 py-1 rounded font-bold">Sair do Painel</button>
+                </div>`;
+        }
+
+        function renderAdminOrders() {
+            let html = renderAdminNav() + `<h2 class="text-2xl font-black mb-6">Gestão de Pedidos</h2>`;
+            if(state.adminOrders.length === 0) return html + `<p>Sem pedidos.</p>`;
+
+            html += `<div class="space-y-4">`;
+            state.adminOrders.forEach(order => {
+                const items = JSON.parse(order.items_json);
+                const colors = {'Pendente':'bg-yellow-200 text-yellow-900','Preparando':'bg-blue-200 text-blue-900','Enviado':'bg-purple-200 text-purple-900','Concluído':'bg-green-200 text-green-900'};
+                
+                html += `
+                    <div class="bg-white p-4 rounded-lg shadow-md border-l-8 ${order.status==='Pendente'?'border-yellow-400':(order.status==='Concluído'?'border-green-500':'border-blue-500')}">
+                        <div class="flex justify-between border-b pb-2 mb-2">
+                            <div><span class="font-black text-lg">#${order.id} - ${order.customer_name}</span><p class="text-sm text-gray-500">📱 ${order.customer_whatsapp} | 🕒 ${new Date(order.created_at).toLocaleString()}</p></div>
+                            <select onchange="updateOrderStatus(${order.id}, this.value)" class="text-sm border-2 rounded p-1 font-bold ${colors[order.status]||'bg-gray-100'}">
+                                <option ${order.status==='Pendente'?'selected':''}>Pendente</option><option ${order.status==='Preparando'?'selected':''}>Preparando</option><option ${order.status==='Enviado'?'selected':''}>Enviado</option><option ${order.status==='Concluído'?'selected':''}>Concluído</option>
+                            </select>
+                        </div>
+                        <p class="text-sm mb-2"><strong>Tipo:</strong> ${order.type} ${order.type==='Entrega'?`<br><strong>Endereço:</strong> ${order.customer_address}`:''}</p>
+                        <div class="bg-gray-50 p-2 rounded text-sm mb-3 border">
+                            <ul class="list-disc pl-4">${items.map(i => `<li><b>${i.name}</b> ${i.details ? `(<i class="text-gray-600">${i.details}</i>)` : ''} - ${formatMoney(i.price)}</li>`).join('')}</ul>
+                        </div>
+                        <div class="flex justify-between items-center"><p class="font-black text-xl text-green-600">Total: ${formatMoney(order.total)}</p>
+                            <div class="flex gap-2">
+                                <button onclick="printOrder(${order.id})" class="bg-black text-white px-3 py-1 rounded text-sm font-bold">🖨️ Imprimir</button>
+                                <button onclick="deleteOrder(${order.id})" class="bg-red-600 text-white px-3 py-1 rounded text-sm font-bold">🗑️ Apagar</button>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            return html + `</div>`;
+        }
+
+        async function updateOrderStatus(id, status) {
+            const order = state.adminOrders.find(o => o.id === id);
+            await fetch(`/api/admin/orders/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status, customer_name: order.customer_name, customer_address: order.customer_address }) });
+            showToast("Status salvo!");
+        }
+        async function deleteOrder(id) {
+            if(confirm("Apagar pedido?")) { await fetch(`/api/admin/orders/${id}`, { method: 'DELETE', headers: authHeaders() }); loadAdminOrders(); }
+        }
+
+        function printOrder(id) {
+            const order = state.adminOrders.find(o => o.id === id);
+            const items = JSON.parse(order.items_json);
+            let printHtml = `
+                <div style="text-align:center;margin-bottom:10px;font-weight:bold;">ANDIRBY'S PIZZARIA<br>Pedido #${order.id}<br>${new Date(order.created_at).toLocaleString()}</div>
+                <div style="border-top:1px dashed black;border-bottom:1px dashed black;padding:5px 0;margin-bottom:10px;">
+                    <strong>Cli:</strong> ${order.customer_name}<br><strong>Tel:</strong> ${order.customer_whatsapp}<br><strong>Tipo:</strong> ${order.type}<br>${order.type==='Entrega'?`<strong>End:</strong> ${order.customer_address}`:''}
+                </div>
+                <table style="width:100%;font-size:12px;margin-bottom:10px;">
+                    ${items.map(i => `<tr><td style="padding-bottom:5px;"><b>${i.name}</b><br><small>${i.details||''}</small></td><td style="text-align:right;vertical-align:top;">${formatMoney(i.price)}</td></tr>`).join('')}
+                </table>
+                <div style="border-top:1px dashed black;padding-top:5px;text-align:right;">Subtotal: ${formatMoney(order.subtotal)}<br>${order.type==='Entrega'?`Taxa: ${formatMoney(order.delivery_fee)}<br>`:''}<strong>TOTAL: ${formatMoney(order.total)}</strong></div>
+            `;
+            document.getElementById('print-area').innerHTML = printHtml; window.print();
+        }
+
+        function renderAdminMenu() {
+            let html = renderAdminNav() + `<h2 class="text-2xl font-black mb-6">Configurações Base</h2>`;
+            
+            html += `
+                <div class="bg-white p-5 rounded-lg shadow mb-8 border-t-4 border-andirby-yellow">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-sm font-bold block mb-1">Taxa de Entrega (R$)</label>
+                            <input type="number" id="cfg_delivery" value="${state.settings.delivery_fee}" step="0.10" class="border-2 p-2 rounded w-full font-bold">
+                        </div>
+                        <div>
+                            <label class="text-sm font-bold block mb-1 text-purple-700">Webhook URL (Integração n8n)</label>
+                            <input type="text" id="cfg_webhook" value="${state.settings.webhook_url}" placeholder="https://seu-n8n.com/webhook/..." class="border-2 p-2 rounded w-full font-mono text-sm">
+                            <p class="text-xs text-gray-500 mt-1">Disparado automaticamente ao criar um pedido.</p>
+                        </div>
+                    </div>
+                    <button onclick="saveSettings()" class="mt-4 bg-andirby-red text-white px-4 py-2 rounded font-black hover-bg-andirby-red">Salvar Configurações</button>
+                </div>
+                
+                <h3 class="font-black text-xl mb-4 border-b pb-2">Preços do Cardápio</h3>
+                <div class="space-y-3">
+            `;
+
+            state.items.forEach(item => {
+                html += `
+                    <div class="bg-white p-3 rounded-lg shadow-sm border flex flex-wrap gap-3 items-center">
+                        <span class="font-bold text-gray-500 w-48 truncate" title="${item.category}">${item.category}</span>
+                        <input type="text" id="edit_name_${item.id}" value="${item.name}" class="border-2 p-1 rounded font-bold flex-grow min-w-[200px]">
+                        <input type="number" id="edit_price_${item.id}" value="${item.price}" step="0.10" class="border-2 p-1 rounded w-28 font-bold text-andirby-red">
+                        <select id="edit_active_${item.id}" class="border-2 p-1 rounded font-bold w-24">
+                            <option value="1" ${item.active ? 'selected':''}>Ativo</option><option value="0" ${!item.active ? 'selected':''}>Inativo</option>
+                        </select>
+                        <button onclick="updateItem(${item.id})" class="bg-gray-800 text-white px-4 py-1 rounded font-bold hover:bg-black">Salvar</button>
+                    </div>`;
+            });
+            return html + `</div>`;
+        }
+
+        async function saveSettings() {
+            const payload = { delivery_fee: document.getElementById('cfg_delivery').value, webhook_url: document.getElementById('cfg_webhook').value };
+            await fetch('/api/admin/settings', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
+            showToast("Configurações salvas!"); fetchMenuData();
+        }
+
+        async function updateItem(id) {
+            const item = state.items.find(i => i.id === id);
+            const payload = {
+                category: item.category, // Não permitimos mudar categoria aqui p/ não quebrar a lógica
+                name: document.getElementById(`edit_name_${id}`).value,
+                price: parseFloat(document.getElementById(`edit_price_${id}`).value),
+                active: parseInt(document.getElementById(`edit_active_${id}`).value)
+            };
+            await fetch(`/api/admin/items/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
+            await fetchMenuData(); showToast("Item atualizado!");
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-4 right-4 bg-andirby-yellow text-black font-black px-6 py-3 rounded-lg shadow-xl z-50 transition-opacity duration-300';
+            toast.innerText = msg; document.body.appendChild(toast);
+            setTimeout(() => { toast.classList.add('opacity-0'); setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        init();
+    </script>
+</body>
+</html>
