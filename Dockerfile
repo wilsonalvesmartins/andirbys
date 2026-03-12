@@ -12,8 +12,8 @@ RUN npm install
 # Copia todo o código para dentro do container
 COPY . .
 
-# Expõe a porta que o servidor Node vai rodar
-EXPOSE 3000
+# Expõe a nova porta que o servidor Node vai rodar
+EXPOSE 3002
 
 # Inicia a aplicação
 CMD ["npm", "start"]
