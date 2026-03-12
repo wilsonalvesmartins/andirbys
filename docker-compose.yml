@@ -3,10 +3,11 @@ version: '3.8'
 services:
   webapp:
     build: .
-    container_name: pizza-delivery-app
+    # Mudei o nome do container para evitar conflitos com os antigos
+    container_name: andirbys-pizza-app 
     ports:
-      - "3000:3000"
+      # Mapeia a porta 3002 da sua VPS para a porta 3002 do container
+      - "3002:3002"
     volumes:
-      # Cria um volume persistente para não perder os dados do banco (SQLite) ao reiniciar o container
       - ./data:/app/data
     restart: unless-stopped
