@@ -25,7 +25,8 @@
     <nav class="bg-andirby-red text-white shadow-md sticky top-0 z-50" id="main-nav">
         <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-2xl font-black text-andirby-yellow tracking-wide flex items-center gap-2 cursor-pointer" onclick="navigate('menu')">
-                🍕 Andirby's
+                <img src="https://drive.google.com/uc?export=view&id=15aZ5GCXmj7zWA0erv1E0xzBK8HyPF1Sa" alt="Logo" class="h-10 w-auto object-contain drop-shadow-md">
+                <span class="hidden sm:inline">Andirby's</span>
             </h1>
             <div class="flex items-center gap-4">
                 <button onclick="navigate('my_orders')" class="text-sm font-bold text-white hover:text-andirby-yellow transition hidden sm:block">Meus Pedidos</button>
@@ -48,6 +49,19 @@
 
     <!-- Área exclusiva para Impressão -->
     <div id="print-area" class="hidden"></div>
+
+    <!-- Modal de Sucesso Genérico -->
+    <div id="success-action-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 text-center border-t-8 border-green-500">
+            <div class="text-5xl mb-4">🛒</div>
+            <h3 class="text-xl font-black text-gray-800 mb-2">Item Adicionado!</h3>
+            <p class="text-gray-600 mb-6 text-sm">O que você deseja fazer agora?</p>
+            <div class="flex flex-col gap-3">
+                <button onclick="navigate('cart'); closeSuccessModal();" class="w-full bg-green-600 text-white py-3 rounded-lg font-black hover:bg-green-700 transition shadow-md">Ver Carrinho</button>
+                <button onclick="closeSuccessModal();" class="w-full bg-gray-100 text-gray-800 py-3 rounded-lg font-bold hover:bg-gray-200 transition border border-gray-300">Continuar Comprando</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         // --- DADOS DO CARDÁPIO: INGREDIENTES EXATOS DO PDF ---
@@ -96,45 +110,29 @@
             modalItem: null
         };
 
-        // --- SISTEMA DE ÁUDIO NATIVO E POLLING ---
         let audioCtx = null;
         let orderPollingInterval = null;
         let lastKnownOrderId = -1;
 
         function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+            if (audioCtx.state === 'suspended') { audioCtx.resume(); }
         }
 
         function playDingDong() {
             try {
                 initAudio();
-                
-                const osc1 = audioCtx.createOscillator();
-                const gain1 = audioCtx.createGain();
-                osc1.type = 'sine';
-                osc1.frequency.setValueAtTime(880, audioCtx.currentTime);
-                gain1.gain.setValueAtTime(0.5, audioCtx.currentTime);
-                gain1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-                osc1.connect(gain1);
-                gain1.connect(audioCtx.destination);
-                osc1.start(audioCtx.currentTime);
-                osc1.stop(audioCtx.currentTime + 0.3);
+                const osc1 = audioCtx.createOscillator(); const gain1 = audioCtx.createGain();
+                osc1.type = 'sine'; osc1.frequency.setValueAtTime(880, audioCtx.currentTime);
+                gain1.gain.setValueAtTime(0.5, audioCtx.currentTime); gain1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc1.connect(gain1); gain1.connect(audioCtx.destination);
+                osc1.start(audioCtx.currentTime); osc1.stop(audioCtx.currentTime + 0.3);
 
-                const osc2 = audioCtx.createOscillator();
-                const gain2 = audioCtx.createGain();
-                osc2.type = 'sine';
-                osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.3);
-                gain2.gain.setValueAtTime(0.5, audioCtx.currentTime + 0.3);
-                gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
-                osc2.connect(gain2);
-                gain2.connect(audioCtx.destination);
-                osc2.start(audioCtx.currentTime + 0.3);
-                osc2.stop(audioCtx.currentTime + 0.8);
+                const osc2 = audioCtx.createOscillator(); const gain2 = audioCtx.createGain();
+                osc2.type = 'sine'; osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.3);
+                gain2.gain.setValueAtTime(0.5, audioCtx.currentTime + 0.3); gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
+                osc2.connect(gain2); gain2.connect(audioCtx.destination);
+                osc2.start(audioCtx.currentTime + 0.3); osc2.stop(audioCtx.currentTime + 0.8);
             } catch(e) { console.error("Erro no áudio:", e); }
         }
 
@@ -175,11 +173,10 @@
         }
 
         function formatMoney(value) { return `R$ ${parseFloat(value).toFixed(2).replace('.', ',')}`; }
-        
-        function formatDate(dateString) {
-            const d = new Date(dateString + 'Z');
-            return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-        }
+        function formatDate(dateString) { return new Date(dateString + 'Z').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }); }
+
+        function showSuccessModal() { document.getElementById('success-action-modal').classList.remove('hidden'); }
+        function closeSuccessModal() { document.getElementById('success-action-modal').classList.add('hidden'); }
 
         function renderMenu() {
             let html = `
@@ -190,11 +187,11 @@
                         `<p class="text-gray-500 font-bold">Faça seu pedido conosco!</p>`}
                 </div>`;
             
-            const categories = [...new Set(state.items.map(i => i.category))];
-            const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Pizza no Prato', 'Esfihas', 'Outros', 'Bordas Recheadas', 'Bebidas'];
+            // Removemos "Bordas Recheadas" da lista principal, pois agora é apenas adicional
+            const categories = [...new Set(state.items.filter(i => i.category !== 'Bordas Recheadas').map(i => i.category))];
+            const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Pizza no Prato', 'Esfihas', 'Porções', 'Outros', 'Bebidas'];
             categories.sort((a, b) => {
-                let idxA = catOrder.findIndex(c => a.includes(c));
-                let idxB = catOrder.findIndex(c => b.includes(c));
+                let idxA = catOrder.findIndex(c => a.includes(c)); let idxB = catOrder.findIndex(c => b.includes(c));
                 if(idxA === -1) idxA = 99; if(idxB === -1) idxB = 99;
                 return idxA - idxB;
             });
@@ -208,12 +205,13 @@
                     const isConfigurable = item.category.includes('Pizzas') || item.category.includes('Esfihas');
                     html += `
                         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex justify-between items-center hover:shadow-md transition cursor-pointer" onclick="${isConfigurable ? `openConfigModal(${item.id})` : `addSimpleItem(${item.id})`}">
-                            <div>
+                            <div class="flex-1 pr-4">
                                 <h4 class="font-bold text-gray-800">${item.name}</h4>
+                                ${item.description ? `<p class="text-xs text-gray-500 italic mt-1 leading-tight">${item.description}</p>` : ''}
                                 <p class="text-andirby-red font-bold mt-1">${formatMoney(item.price)}</p>
                             </div>
-                            <button class="bg-andirby-yellow text-black px-3 py-2 rounded-lg font-bold hover:bg-yellow-500 transition shadow">
-                                ${isConfigurable ? 'Montar' : '➕'}
+                            <button class="bg-andirby-yellow text-black px-4 py-2 rounded-lg font-bold hover:bg-yellow-500 transition shadow shrink-0">
+                                ${isConfigurable ? 'Montar' : 'Adicionar'}
                             </button>
                         </div>
                     `;
@@ -257,15 +255,10 @@
                 if(item.name.includes('2 Sabores')) modalMax = 2;
                 if(item.name.includes('3 Sabores')) modalMax = 3;
 
-                let showSalgadas = true;
-                let showDoces = true;
+                let showSalgadas = true; let showDoces = true;
                 const nameLower = item.name.toLowerCase();
-
-                if (nameLower.includes('salgada') && !nameLower.includes('doce')) {
-                    showDoces = false;
-                } else if (nameLower.includes('doce') && !nameLower.includes('salgada')) {
-                    showSalgadas = false;
-                }
+                if (nameLower.includes('salgada') && !nameLower.includes('doce')) showDoces = false;
+                else if (nameLower.includes('doce') && !nameLower.includes('salgada')) showSalgadas = false;
                 
                 let html = `<p class="mb-4 text-sm bg-yellow-100 p-2 rounded text-yellow-800 font-bold">Escolha até ${modalMax} sabor(es):</p>`;
                 
@@ -287,7 +280,6 @@
                     });
                     html += `</div>`;
                 }
-                
                 if (showDoces) {
                     html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Doces</h4><div class="space-y-2">`;
                     FLAVORS.doces.forEach((f, idx) => {
@@ -305,6 +297,22 @@
                             </div>`;
                     });
                     html += `</div>`;
+                }
+
+                // --- ADICIONAL DE BORDA INTELIGENTE ---
+                let bordas = state.items.filter(i => i.category === 'Bordas Recheadas' && i.active === 1);
+                if(item.name.toLowerCase().includes('gigante') || item.category.toLowerCase().includes('gigante')) {
+                    bordas = bordas.filter(b => b.name.toLowerCase().includes('gigante'));
+                } else if(item.name.toLowerCase().includes('família') || item.category.toLowerCase().includes('família')) {
+                    bordas = bordas.filter(b => b.name.toLowerCase().includes('família'));
+                }
+
+                if(bordas.length > 0) {
+                    html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-6">Borda Recheada (Opcional)</h4>
+                    <select id="select_borda" onchange="renderModalFooterPizza()" class="w-full p-3 border-2 rounded-lg font-bold text-gray-700 outline-none focus:border-andirby-red mb-4">
+                        <option value="0">Sem Borda (+ R$ 0,00)</option>
+                        ${bordas.map(b => `<option value="${b.id}">${b.name} (+ ${formatMoney(b.price)})</option>`).join('')}
+                    </select>`;
                 }
                 
                 body.innerHTML = html;
@@ -345,32 +353,34 @@
             const flavorName = flavorObj.name;
             const pos = modalSelections.indexOf(flavorName);
             
-            if (pos > -1) {
-                modalSelections.splice(pos, 1);
-            } else {
-                if (modalSelections.length < modalMax) {
-                    modalSelections.push(flavorName);
-                } else {
-                    showToast(`Máximo de ${modalMax} sabores permitidos!`);
-                }
+            if (pos > -1) { modalSelections.splice(pos, 1); } 
+            else {
+                if (modalSelections.length < modalMax) modalSelections.push(flavorName);
+                else showToast(`Máximo de ${modalMax} sabores permitidos!`);
             }
             
-            FLAVORS.salgadas.forEach((f, i) => {
-                const chk = document.getElementById(`chk_salgadas_${i}`);
-                if(chk) chk.checked = modalSelections.includes(f.name);
-            });
-            FLAVORS.doces.forEach((f, i) => {
-                const chk = document.getElementById(`chk_doces_${i}`);
-                if(chk) chk.checked = modalSelections.includes(f.name);
-            });
+            FLAVORS.salgadas.forEach((f, i) => { const chk = document.getElementById(`chk_salgadas_${i}`); if(chk) chk.checked = modalSelections.includes(f.name); });
+            FLAVORS.doces.forEach((f, i) => { const chk = document.getElementById(`chk_doces_${i}`); if(chk) chk.checked = modalSelections.includes(f.name); });
             renderModalFooterPizza();
         }
 
         function renderModalFooterPizza() {
             const valid = modalSelections.length > 0 && modalSelections.length <= modalMax;
+            
+            // Cálculo do preço final considerando a borda selecionada ao vivo
+            let extraPrice = 0;
+            const bordaSelect = document.getElementById('select_borda');
+            if (bordaSelect && bordaSelect.value !== "0") {
+                const bItem = state.items.find(i => i.id == bordaSelect.value);
+                if(bItem) extraPrice = bItem.price;
+            }
+            
+            const finalPrice = state.modalItem.price + extraPrice;
+
             const btn = `
-                <button onclick="confirmModalItem()" class="w-full py-3 rounded-lg font-bold text-white transition ${valid ? 'bg-andirby-red hover-bg-andirby-red' : 'bg-gray-400 cursor-not-allowed'}" ${!valid ? 'disabled' : ''}>
-                    Adicionar ao Carrinho (${modalSelections.length}/${modalMax})
+                <button onclick="confirmModalItem()" class="w-full py-3 rounded-lg font-bold text-white transition flex justify-between items-center px-5 shadow-lg ${valid ? 'bg-andirby-red hover-bg-andirby-red' : 'bg-gray-400 cursor-not-allowed'}" ${!valid ? 'disabled' : ''}>
+                    <span>Adicionar (${modalSelections.length}/${modalMax})</span>
+                    <span class="text-lg">${formatMoney(finalPrice)}</span>
                 </button>`;
             document.getElementById('modal-footer').innerHTML = btn;
         }
@@ -378,11 +388,7 @@
         function changeEsfihaQty(idx, diff) {
             const flavorName = FLAVORS.esfihas[idx].name;
             const currentTotal = Object.values(modalSelections).reduce((a, b) => a + b, 0);
-            
-            if (diff > 0 && currentTotal >= modalMax) {
-                showToast(`Limite de ${modalMax} atingido!`);
-                return;
-            }
+            if (diff > 0 && currentTotal >= modalMax) return showToast(`Limite de ${modalMax} atingido!`);
             if (diff < 0 && modalSelections[flavorName] <= 0) return;
 
             modalSelections[flavorName] += diff;
@@ -397,16 +403,28 @@
             const currentTotal = Object.values(modalSelections).reduce((a, b) => a + b, 0);
             const valid = currentTotal === modalMax;
             const btn = `
-                <button onclick="confirmModalItem()" class="w-full py-3 rounded-lg font-black text-black transition ${valid ? 'bg-andirby-yellow hover:bg-yellow-500 shadow-lg' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}" ${!valid ? 'disabled' : ''}>
-                    Confirmar Combo
+                <button onclick="confirmModalItem()" class="w-full py-3 rounded-lg font-black text-black transition flex justify-between px-5 ${valid ? 'bg-andirby-yellow hover:bg-yellow-500 shadow-lg' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}" ${!valid ? 'disabled' : ''}>
+                    <span>Confirmar Combo</span>
+                    <span class="text-lg">${formatMoney(state.modalItem.price)}</span>
                 </button>`;
             document.getElementById('modal-footer').innerHTML = btn;
         }
 
         function confirmModalItem() {
             let details = "";
+            let finalPrice = state.modalItem.price;
+
             if (state.modalItem.category.includes('Pizzas')) {
                 details = modalSelections.join(' + ');
+                // Anexa a borda selecionada ao detalhe e ao preço
+                const bordaSelect = document.getElementById('select_borda');
+                if (bordaSelect && bordaSelect.value !== "0") {
+                    const bItem = state.items.find(i => i.id == bordaSelect.value);
+                    if(bItem) {
+                        details += ` (Com ${bItem.name})`;
+                        finalPrice += bItem.price;
+                    }
+                }
             } else if (state.modalItem.category.includes('Esfihas')) {
                 const picked = [];
                 for(let f in modalSelections) {
@@ -419,23 +437,21 @@
                 type: 'configured',
                 name: `${state.modalItem.category} - ${state.modalItem.name}`,
                 details: details,
-                price: state.modalItem.price
+                price: finalPrice
             });
             
             closeModal();
             render();
-            showToast("Adicionado!");
+            showSuccessModal(); // Chama a nova janela inteligente
         }
 
-        function closeModal() {
-            document.getElementById('config-modal').classList.add('hidden');
-        }
+        function closeModal() { document.getElementById('config-modal').classList.add('hidden'); }
 
         function addSimpleItem(id) {
             const item = state.items.find(i => i.id === id);
             state.cart.push({ type: 'simple', name: item.name, details: item.category, price: item.price });
             render();
-            showToast(`${item.name} adicionado!`);
+            showSuccessModal(); // Chama a nova janela inteligente
         }
 
         function removeFromCart(index) {
@@ -608,7 +624,6 @@
             } catch(err) { alert("Erro de conexão."); }
         }
 
-        // --- SISTEMA DE BUSCA DOS PEDIDOS DO CLIENTE ---
         function renderMyOrders() {
             return `
                 <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md border-t-4 border-andirby-red">
@@ -626,23 +641,15 @@
         async function searchMyOrders() {
             const phone = document.getElementById('search_phone').value.replace(/\D/g, '');
             const resultsDiv = document.getElementById('my-orders-results');
-            
-            if (phone.length < 10) {
-                resultsDiv.innerHTML = '<p class="text-red-500 text-sm font-bold text-center">Por favor, insira um número válido com DDD.</p>';
-                return;
-            }
+            if (phone.length < 10) return resultsDiv.innerHTML = '<p class="text-red-500 text-sm font-bold text-center">Insira um número válido com DDD.</p>';
             
             resultsDiv.innerHTML = '<div class="loader mx-auto"></div>';
-            
             try {
                 const res = await fetch(`/api/client/orders/${phone}`);
                 if (!res.ok) throw new Error();
                 const orders = await res.json();
                 
-                if (orders.length === 0) {
-                    resultsDiv.innerHTML = '<p class="text-gray-500 text-center font-bold">Nenhum pedido encontrado para este número.</p>';
-                    return;
-                }
+                if (orders.length === 0) return resultsDiv.innerHTML = '<p class="text-gray-500 text-center font-bold">Nenhum pedido encontrado.</p>';
 
                 let html = '';
                 orders.forEach(o => {
@@ -660,9 +667,7 @@
                     `;
                 });
                 resultsDiv.innerHTML = html;
-            } catch (e) {
-                resultsDiv.innerHTML = '<p class="text-red-500 text-sm text-center font-bold">Erro ao buscar pedidos. O sistema pode estar sendo atualizado, tente novamente em instantes.</p>';
-            }
+            } catch (e) { resultsDiv.innerHTML = '<p class="text-red-500 text-sm text-center font-bold">Erro ao buscar pedidos.</p>'; }
         }
 
         function promptAdmin() {
@@ -670,7 +675,7 @@
             if(pwd === "andirbys2026") {
                 state.adminToken = "Bearer andirbys2026";
                 localStorage.setItem('adminToken', state.adminToken);
-                initAudio(); // Inicializa o motor de som interno
+                initAudio();
                 navigate('admin_orders');
             } else if(pwd) alert("Incorreta!");
         }
@@ -682,13 +687,7 @@
                 const res = await fetch('/api/admin/orders', { headers: authHeaders() });
                 if(res.status === 401) { navigate('menu'); return; }
                 state.adminOrders = await res.json();
-                
-                if(state.adminOrders.length > 0) {
-                    lastKnownOrderId = state.adminOrders[0].id;
-                } else {
-                    lastKnownOrderId = 0;
-                }
-
+                lastKnownOrderId = state.adminOrders.length > 0 ? state.adminOrders[0].id : 0;
                 app.innerHTML = renderAdminOrders();
                 startAdminPolling(); 
             } catch(e) { navigate('menu'); }
@@ -696,13 +695,9 @@
 
         function startAdminPolling() {
             if(orderPollingInterval) clearInterval(orderPollingInterval);
-            
-            // Polling alterado para 30 segundos!
             orderPollingInterval = setInterval(async () => {
                 if(state.view !== 'admin_orders') return; 
-                
                 try {
-                    // Efeito visual amarelo para mostrar que está checando na internet
                     const liveIndicator = document.getElementById('live-indicator');
                     if(liveIndicator) liveIndicator.classList.replace('text-green-500', 'text-yellow-500');
 
@@ -710,19 +705,15 @@
                     if(!res.ok) return;
                     
                     const newOrders = await res.json();
-                    
                     if(liveIndicator) setTimeout(() => liveIndicator.classList.replace('text-yellow-500', 'text-green-500'), 500);
 
                     if(newOrders.length > 0) {
                         const latestId = newOrders[0].id;
                         if(lastKnownOrderId !== -1 && latestId > lastKnownOrderId) {
-                            playDingDong();
-                            showToast("🔔 NOVO PEDIDO RECEBIDO!");
+                            playDingDong(); showToast("🔔 NOVO PEDIDO RECEBIDO!");
                         }
                         lastKnownOrderId = latestId;
                     }
-                    
-                    // Somente redesenha a tela se houver mudança real de dados (evita piscar à toa)
                     if(JSON.stringify(state.adminOrders) !== JSON.stringify(newOrders)) {
                         state.adminOrders = newOrders;
                         document.getElementById('app').innerHTML = renderAdminOrders();
@@ -776,8 +767,7 @@
         }
 
         async function updateOrderStatus(id, status) {
-            const order = state.adminOrders.find(o => o.id === id);
-            order.status = status; // Mantém o estado local para a tela não piscar desnecessariamente no próximo polling
+            const order = state.adminOrders.find(o => o.id === id); order.status = status;
             await fetch(`/api/admin/orders/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status, customer_name: order.customer_name, customer_address: order.customer_address }) });
             showToast("Status e Webhook enviados!");
         }
@@ -807,6 +797,21 @@
         function renderAdminMenu() {
             let html = renderAdminNav() + `<h2 class="text-2xl font-black mb-6">Configurações & Gestão</h2>`;
             
+            // Formulário de Adicionar Categoria/Item
+            html += `
+                <div class="bg-gray-50 p-5 rounded-lg shadow-inner border border-gray-300 mb-8 border-l-4 border-andirby-red">
+                    <h3 class="font-bold text-lg mb-3 text-andirby-red flex items-center gap-2">➕ Adicionar Item ao Cardápio</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input type="text" id="new_cat" placeholder="Categoria (Ex: Porções, Bebidas)" class="border-2 p-2 rounded focus:border-andirby-red outline-none">
+                        <input type="text" id="new_name" placeholder="Nome do Item" class="border-2 p-2 rounded focus:border-andirby-red outline-none">
+                        <input type="text" id="new_desc" placeholder="Descrição / Ingredientes (Opcional)" class="border-2 p-2 rounded focus:border-andirby-red outline-none sm:col-span-2">
+                        <input type="number" id="new_price" placeholder="Preço (R$)" step="0.10" class="border-2 p-2 rounded focus:border-andirby-red outline-none">
+                        <button onclick="addNewItem()" class="bg-green-600 text-white font-bold p-2 rounded hover:bg-green-700 transition shadow-md">Gravar Item</button>
+                    </div>
+                </div>
+            `;
+
+            // Configurações Globais
             html += `
                 <div class="bg-white p-5 rounded-lg shadow mb-8 border-t-4 border-andirby-yellow">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -832,30 +837,59 @@
                     <p class="text-xs text-gray-500 mb-3">Marque os sabores que acabaram para bloquear no site.</p>
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 border rounded">
                         ${[...FLAVORS.salgadas, ...FLAVORS.doces, ...FLAVORS.esfihas].map(f => `
-                            <label class="flex items-center space-x-2 text-sm">
+                            <label class="flex items-center space-x-2 text-sm cursor-pointer">
                                 <input type="checkbox" class="flavor-unavailable-chk" value="${f.name}" ${state.settings.unavailable_flavors.includes(f.name) ? 'checked' : ''}>
                                 <span class="truncate" title="${f.name}">${f.name}</span>
                             </label>
                         `).join('')}
                     </div>
 
-                    <button onclick="saveSettings()" class="mt-6 bg-andirby-red text-white px-4 py-3 rounded font-black hover-bg-andirby-red w-full">Salvar Configurações</button>
+                    <button onclick="saveSettings()" class="mt-6 bg-andirby-red text-white px-4 py-3 rounded font-black hover-bg-andirby-red w-full shadow-md">Salvar Configurações</button>
                 </div>
                 
-                <h3 class="font-black text-xl mb-4 border-b pb-2">Preços do Cardápio Base</h3>
+                <h3 class="font-black text-xl mb-4 border-b pb-2">Lista de Produtos Cadastrados</h3>
                 <div class="space-y-3">
             `;
 
             state.items.forEach(item => {
                 html += `
-                    <div class="bg-white p-3 rounded-lg shadow-sm border flex flex-wrap gap-3 items-center">
-                        <span class="font-bold text-gray-500 w-48 truncate" title="${item.category}">${item.category}</span>
-                        <input type="text" id="edit_name_${item.id}" value="${item.name}" class="border-2 p-1 rounded font-bold flex-grow min-w-[200px]">
-                        <input type="number" id="edit_price_${item.id}" value="${item.price}" step="0.10" class="border-2 p-1 rounded w-28 font-bold text-andirby-red">
-                        <button onclick="updateItem(${item.id})" class="bg-gray-800 text-white px-4 py-1 rounded font-bold hover:bg-black">Salvar</button>
+                    <div class="bg-white p-3 rounded-lg shadow-sm border flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                        <input type="text" id="edit_cat_${item.id}" value="${item.category}" class="border-2 p-2 rounded font-bold w-full sm:w-40 text-sm focus:border-andirby-red outline-none" title="Categoria">
+                        
+                        <div class="flex-grow w-full flex flex-col gap-1">
+                            <input type="text" id="edit_name_${item.id}" value="${item.name}" class="border-2 p-2 rounded font-bold w-full text-sm focus:border-andirby-red outline-none" title="Nome">
+                            <input type="text" id="edit_desc_${item.id}" value="${item.description || ''}" placeholder="Descrição (Opcional)" class="border-2 p-1 rounded text-xs w-full text-gray-600 focus:border-andirby-red outline-none">
+                        </div>
+
+                        <input type="number" id="edit_price_${item.id}" value="${item.price}" step="0.10" class="border-2 p-2 rounded w-full sm:w-24 font-bold text-andirby-red focus:border-andirby-red outline-none">
+                        
+                        <select id="edit_active_${item.id}" class="border-2 p-2 rounded font-bold w-full sm:w-24 text-sm">
+                            <option value="1" ${item.active ? 'selected':''}>Ativo</option>
+                            <option value="0" ${!item.active ? 'selected':''}>Inativo</option>
+                        </select>
+                        <button onclick="updateItem(${item.id})" class="bg-gray-800 text-white px-4 py-2 rounded font-bold hover:bg-black w-full sm:w-auto shadow">Salvar</button>
                     </div>`;
             });
             return html + `</div>`;
+        }
+
+        async function addNewItem() {
+            const payload = {
+                category: document.getElementById('new_cat').value,
+                name: document.getElementById('new_name').value,
+                description: document.getElementById('new_desc').value,
+                price: parseFloat(document.getElementById('new_price').value)
+            };
+            if(!payload.category || !payload.name || isNaN(payload.price)) return alert("Preencha categoria, nome e preço obrigatoriamente.");
+            
+            await fetch('/api/admin/items', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+            showToast("Novo item gravado com sucesso!");
+            
+            document.getElementById('new_cat').value = '';
+            document.getElementById('new_name').value = '';
+            document.getElementById('new_desc').value = '';
+            document.getElementById('new_price').value = '';
+            fetchMenuData();
         }
 
         async function saveSettings() {
@@ -875,15 +909,15 @@
         }
 
         async function updateItem(id) {
-            const item = state.items.find(i => i.id === id);
             const payload = {
-                category: item.category, 
+                category: document.getElementById(`edit_cat_${id}`).value, 
                 name: document.getElementById(`edit_name_${id}`).value,
+                description: document.getElementById(`edit_desc_${id}`).value,
                 price: parseFloat(document.getElementById(`edit_price_${id}`).value),
-                active: 1
+                active: parseInt(document.getElementById(`edit_active_${id}`).value)
             };
             await fetch(`/api/admin/items/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
-            await fetchMenuData(); showToast("Preço atualizado!");
+            await fetchMenuData(); showToast("Item atualizado!");
         }
 
         function showToast(msg) {
