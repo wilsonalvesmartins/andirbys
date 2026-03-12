@@ -25,8 +25,8 @@
     <nav class="bg-andirby-red text-white shadow-md sticky top-0 z-50" id="main-nav">
         <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-2xl font-black text-andirby-yellow tracking-wide flex items-center gap-2 cursor-pointer" onclick="navigate('menu')">
-                <img src="https://drive.google.com/uc?export=view&id=15aZ5GCXmj7zWA0erv1E0xzBK8HyPF1Sa" alt="Logo" class="h-10 w-auto object-contain drop-shadow-md">
-                <span class="hidden sm:inline">Andirby's</span>
+                <img id="logo-img" src="" alt="Logo" class="h-10 w-auto object-contain drop-shadow-md hidden">
+                <span id="brand-text" class="hidden sm:inline">Andirby's</span>
             </h1>
             <div class="flex items-center gap-4">
                 <button onclick="navigate('my_orders')" class="text-sm font-bold text-white hover:text-andirby-yellow transition hidden sm:block">Meus Pedidos</button>
@@ -102,7 +102,7 @@
         const state = {
             view: 'menu',
             items: [],
-            settings: { delivery_fee: 0, webhook_url: '', is_open: '1', unavailable_flavors: [] },
+            settings: { delivery_fee: 0, webhook_url: '', is_open: '1', unavailable_flavors: [], logo_url: '' },
             cart: [],
             userData: { whatsapp: '', name: '', address: '' },
             adminToken: localStorage.getItem('adminToken') || null,
@@ -150,6 +150,18 @@
                 state.settings.webhook_url = data.settings.webhook_url || '';
                 state.settings.is_open = data.settings.is_open || '1';
                 state.settings.unavailable_flavors = data.settings.unavailable_flavors ? JSON.parse(data.settings.unavailable_flavors) : [];
+                state.settings.logo_url = data.settings.logo_url || '';
+
+                const logoImg = document.getElementById('logo-img');
+                const brandText = document.getElementById('brand-text');
+                if (state.settings.logo_url) {
+                    logoImg.src = state.settings.logo_url;
+                    logoImg.classList.remove('hidden');
+                    brandText.classList.add('hidden', 'sm:inline');
+                } else {
+                    logoImg.classList.add('hidden');
+                    brandText.classList.remove('hidden');
+                }
             } catch (e) { showToast("Erro de conexão"); }
         }
 
@@ -187,9 +199,8 @@
                         `<p class="text-gray-500 font-bold">Faça seu pedido conosco!</p>`}
                 </div>`;
             
-            // Removemos "Bordas Recheadas" da lista principal, pois agora é apenas adicional
             const categories = [...new Set(state.items.filter(i => i.category !== 'Bordas Recheadas').map(i => i.category))];
-            const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Pizza no Prato', 'Esfihas', 'Porções', 'Outros', 'Bebidas'];
+            const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Esfihas', 'Porções', 'Outros', 'Bebidas'];
             categories.sort((a, b) => {
                 let idxA = catOrder.findIndex(c => a.includes(c)); let idxB = catOrder.findIndex(c => b.includes(c));
                 if(idxA === -1) idxA = 99; if(idxB === -1) idxB = 99;
@@ -239,6 +250,17 @@
 
         let modalSelections = []; 
         let modalMax = 1;
+
+        window.toggleBordaFlavor = function() {
+            const select = document.getElementById('select_borda');
+            const div = document.getElementById('borda_flavor_div');
+            if(select && select.value !== "0") {
+                div.classList.remove('hidden');
+            } else {
+                div.classList.add('hidden');
+            }
+            renderModalFooterPizza();
+        }
 
         function openConfigModal(id) {
             const item = state.items.find(i => i.id === id);
@@ -309,10 +331,13 @@
 
                 if(bordas.length > 0) {
                     html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-6">Borda Recheada (Opcional)</h4>
-                    <select id="select_borda" onchange="renderModalFooterPizza()" class="w-full p-3 border-2 rounded-lg font-bold text-gray-700 outline-none focus:border-andirby-red mb-4">
+                    <select id="select_borda" onchange="toggleBordaFlavor()" class="w-full p-3 border-2 rounded-lg font-bold text-gray-700 outline-none focus:border-andirby-red mb-2">
                         <option value="0">Sem Borda (+ R$ 0,00)</option>
                         ${bordas.map(b => `<option value="${b.id}">${b.name} (+ ${formatMoney(b.price)})</option>`).join('')}
-                    </select>`;
+                    </select>
+                    <div id="borda_flavor_div" class="hidden mb-4">
+                        <input type="text" id="borda_flavor_input" placeholder="Sabor da Borda (Ex: Catupiry, Cheddar)" class="w-full border-2 p-3 rounded-lg font-bold text-gray-700 outline-none focus:border-andirby-red" onkeyup="renderModalFooterPizza()">
+                    </div>`;
                 }
                 
                 body.innerHTML = html;
@@ -367,7 +392,6 @@
         function renderModalFooterPizza() {
             const valid = modalSelections.length > 0 && modalSelections.length <= modalMax;
             
-            // Cálculo do preço final considerando a borda selecionada ao vivo
             let extraPrice = 0;
             const bordaSelect = document.getElementById('select_borda');
             if (bordaSelect && bordaSelect.value !== "0") {
@@ -416,12 +440,13 @@
 
             if (state.modalItem.category.includes('Pizzas')) {
                 details = modalSelections.join(' + ');
-                // Anexa a borda selecionada ao detalhe e ao preço
                 const bordaSelect = document.getElementById('select_borda');
                 if (bordaSelect && bordaSelect.value !== "0") {
                     const bItem = state.items.find(i => i.id == bordaSelect.value);
+                    const bFlavorInput = document.getElementById('borda_flavor_input');
+                    const bFlavor = bFlavorInput ? bFlavorInput.value.trim() : '';
                     if(bItem) {
-                        details += ` (Com ${bItem.name})`;
+                        details += ` (Com ${bItem.name}${bFlavor ? ` de ${bFlavor}` : ''})`;
                         finalPrice += bItem.price;
                     }
                 }
@@ -442,7 +467,7 @@
             
             closeModal();
             render();
-            showSuccessModal(); // Chama a nova janela inteligente
+            showSuccessModal(); 
         }
 
         function closeModal() { document.getElementById('config-modal').classList.add('hidden'); }
@@ -451,7 +476,7 @@
             const item = state.items.find(i => i.id === id);
             state.cart.push({ type: 'simple', name: item.name, details: item.category, price: item.price });
             render();
-            showSuccessModal(); // Chama a nova janela inteligente
+            showSuccessModal(); 
         }
 
         function removeFromCart(index) {
@@ -549,6 +574,11 @@
                         </div>
                     </div>
 
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                        <h3 class="font-black text-lg mb-4">Observações (Opcional)</h3>
+                        <textarea id="observations" rows="2" placeholder="Ex: Tirar cebola, mandar troco para R$ 50..." class="w-full border-2 border-gray-300 rounded-lg p-3 outline-none focus:border-andirby-red"></textarea>
+                    </div>
+
                     <div class="bg-gray-900 text-white rounded-lg shadow-sm p-5 border-l-4 border-andirby-yellow">
                         <h3 class="font-black text-lg mb-4 border-b border-gray-700 pb-2 text-andirby-yellow">Resumo</h3>
                         <div class="flex justify-between mb-2 text-gray-300">
@@ -591,12 +621,18 @@
             e.preventDefault();
             if(state.settings.is_open === '0') return alert("Desculpe, restaurante fechado.");
             
+            const obs = document.getElementById('observations') ? document.getElementById('observations').value : '';
+            const itemsPayload = [...state.cart];
+            if (obs.trim() !== '') {
+                itemsPayload.push({ type: 'simple', name: "Observações do Cliente", details: obs.trim(), price: 0 });
+            }
+
             const payload = {
                 whatsapp: document.getElementById('whatsapp').value.replace(/\D/g, ''),
                 name: document.getElementById('name').value,
                 address: document.getElementById('address') ? document.getElementById('address').value : '',
                 type: checkoutState.type === 'delivery' ? 'Entrega' : 'Retirada',
-                items: state.cart,
+                items: itemsPayload,
                 subtotal: state.cart.reduce((a, i) => a + i.price, 0),
                 delivery_fee: checkoutState.type === 'delivery' ? state.settings.delivery_fee : 0,
             };
@@ -816,15 +852,20 @@
                 <div class="bg-white p-5 rounded-lg shadow mb-8 border-t-4 border-andirby-yellow">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label class="text-sm font-bold block mb-1">Status do Restaurante</label>
+                            <label class="text-sm font-bold block mb-1 text-gray-700">Status do Restaurante</label>
                             <select id="cfg_is_open" class="border-2 p-2 rounded w-full font-bold ${state.settings.is_open === '1' ? 'bg-green-100' : 'bg-red-100'}">
                                 <option value="1" ${state.settings.is_open === '1' ? 'selected' : ''}>🟢 Aberto - Aceitando Pedidos</option>
                                 <option value="0" ${state.settings.is_open === '0' ? 'selected' : ''}>🔴 Fechado - Bloquear Carrinho</option>
                             </select>
                         </div>
                         <div>
-                            <label class="text-sm font-bold block mb-1">Taxa de Entrega (R$)</label>
+                            <label class="text-sm font-bold block mb-1 text-gray-700">Taxa de Entrega (R$)</label>
                             <input type="number" id="cfg_delivery" value="${state.settings.delivery_fee}" step="0.10" class="border-2 p-2 rounded w-full font-bold">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="text-sm font-bold block mb-1 text-blue-700">URL da Logo (Opcional)</label>
+                            <input type="text" id="cfg_logo" value="${state.settings.logo_url}" placeholder="Ex: https://i.imgur.com/logo.png" class="border-2 p-2 rounded w-full font-mono text-sm">
+                            <p class="text-xs text-gray-500 mt-1">Insira um link direto de uma imagem para exibir no topo do site.</p>
                         </div>
                         <div class="md:col-span-2">
                             <label class="text-sm font-bold block mb-1 text-purple-700">Webhook URL (Integração n8n)</label>
@@ -900,6 +941,7 @@
                 is_open: document.getElementById('cfg_is_open').value,
                 delivery_fee: document.getElementById('cfg_delivery').value, 
                 webhook_url: document.getElementById('cfg_webhook').value,
+                logo_url: document.getElementById('cfg_logo').value,
                 unavailable_flavors: unavailable
             };
             
