@@ -4,11 +4,14 @@ services:
   webapp:
     build: .
     container_name: andirbys-pizza-app
-    # O comando 'expose' apenas abre a porta na rede interna do Docker.
-    # Isso permite que o proxy do Coolify direcione o domínio para cá sem dar 404
-    # e sem conflitar com outras aplicações na VPS!
     expose:
       - "3002"
     volumes:
-      - ./data:/app/data
+      # Volume nomeado: Protege 100% o seu banco de dados contra
+      # as deleções do Github e do Coolify ao fazer redeploys.
+      - sqlite_data:/app/data
     restart: unless-stopped
+
+volumes:
+  sqlite_data:
+    name: andirbys_sqlite_data
