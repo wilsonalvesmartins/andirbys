@@ -199,6 +199,7 @@
                         `<p class="text-gray-500 font-bold">Faça seu pedido conosco!</p>`}
                 </div>`;
             
+            // Removemos "Bordas Recheadas" da lista principal, pois agora é apenas adicional
             const categories = [...new Set(state.items.filter(i => i.category !== 'Bordas Recheadas').map(i => i.category))];
             const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Esfihas', 'Porções', 'Outros', 'Bebidas'];
             categories.sort((a, b) => {
@@ -863,9 +864,9 @@
                             <input type="number" id="cfg_delivery" value="${state.settings.delivery_fee}" step="0.10" class="border-2 p-2 rounded w-full font-bold">
                         </div>
                         <div class="md:col-span-2">
-                            <label class="text-sm font-bold block mb-1 text-blue-700">URL da Logo (Opcional)</label>
-                            <input type="text" id="cfg_logo" value="${state.settings.logo_url}" placeholder="Ex: https://i.imgur.com/logo.png" class="border-2 p-2 rounded w-full font-mono text-sm">
-                            <p class="text-xs text-gray-500 mt-1">Insira um link direto de uma imagem para exibir no topo do site.</p>
+                            <label class="text-sm font-bold block mb-1 text-blue-700">Logo do Restaurante (Envio Direto)</label>
+                            <input type="file" id="cfg_logo_file" accept="image/*" class="border-2 p-2 rounded w-full font-mono text-sm bg-blue-50 cursor-pointer">
+                            <p class="text-xs text-gray-500 mt-1">Selecione uma imagem do seu computador/telemóvel. Ela será salva diretamente na sua VPS.</p>
                         </div>
                         <div class="md:col-span-2">
                             <label class="text-sm font-bold block mb-1 text-purple-700">Webhook URL (Integração n8n)</label>
@@ -937,17 +938,38 @@
             const unavailable = [];
             document.querySelectorAll('.flavor-unavailable-chk:checked').forEach(chk => unavailable.push(chk.value));
 
-            const payload = { 
-                is_open: document.getElementById('cfg_is_open').value,
-                delivery_fee: document.getElementById('cfg_delivery').value, 
-                webhook_url: document.getElementById('cfg_webhook').value,
-                logo_url: document.getElementById('cfg_logo').value,
-                unavailable_flavors: unavailable
-            };
+            const fileInput = document.getElementById('cfg_logo_file');
+            let logo_data = null;
             
-            await fetch('/api/admin/settings', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
-            showToast("Configurações salvas!"); 
-            fetchMenuData();
+            const uploadPayload = async () => {
+                const payload = { 
+                    is_open: document.getElementById('cfg_is_open').value,
+                    delivery_fee: document.getElementById('cfg_delivery').value, 
+                    webhook_url: document.getElementById('cfg_webhook').value,
+                    unavailable_flavors: unavailable
+                };
+                if (logo_data) {
+                    payload.logo_data = logo_data;
+                }
+                
+                await fetch('/api/admin/settings', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
+                showToast("Configurações salvas!"); 
+                
+                // Recarrega os dados e a página para exibir a nova logo imediatamente
+                await fetchMenuData();
+            };
+
+            // Se o utilizador anexou um ficheiro, converte para base64 e envia
+            if (fileInput && fileInput.files.length > 0) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    logo_data = e.target.result;
+                    uploadPayload();
+                };
+                reader.readAsDataURL(fileInput.files[0]);
+            } else {
+                uploadPayload();
+            }
         }
 
         async function updateItem(id) {
