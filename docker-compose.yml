@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  webapp:
+    build: .
+    container_name: pizza-delivery-app
+    ports:
+      - "3000:3000"
+    volumes:
+      # Cria um volume persistente para não perder os dados do banco (SQLite) ao reiniciar o container
+      - ./data:/app/data
+    restart: unless-stopped
