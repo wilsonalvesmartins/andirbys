@@ -25,8 +25,7 @@
     <nav class="bg-andirby-red text-white shadow-md sticky top-0 z-50" id="main-nav">
         <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-2xl font-black text-andirby-yellow tracking-wide flex items-center gap-2 cursor-pointer" onclick="navigate('menu')">
-                <img id="logo-img" src="" alt="Logo" class="h-10 w-auto object-contain drop-shadow-md hidden">
-                <span id="brand-text" class="hidden sm:inline">Andirby's</span>
+                🍕 Andirby's
             </h1>
             <div class="flex items-center gap-4">
                 <button onclick="navigate('my_orders')" class="text-sm font-bold text-white hover:text-andirby-yellow transition hidden sm:block">Meus Pedidos</button>
@@ -102,7 +101,7 @@
         const state = {
             view: 'menu',
             items: [],
-            settings: { delivery_fee: 0, webhook_url: '', is_open: '1', unavailable_flavors: [], logo_url: '' },
+            settings: { delivery_fee: 0, webhook_url: '', is_open: '1', unavailable_flavors: [] },
             cart: [],
             userData: { whatsapp: '', name: '', address: '' },
             adminToken: localStorage.getItem('adminToken') || null,
@@ -150,18 +149,6 @@
                 state.settings.webhook_url = data.settings.webhook_url || '';
                 state.settings.is_open = data.settings.is_open || '1';
                 state.settings.unavailable_flavors = data.settings.unavailable_flavors ? JSON.parse(data.settings.unavailable_flavors) : [];
-                state.settings.logo_url = data.settings.logo_url || '';
-
-                const logoImg = document.getElementById('logo-img');
-                const brandText = document.getElementById('brand-text');
-                if (state.settings.logo_url) {
-                    logoImg.src = state.settings.logo_url;
-                    logoImg.classList.remove('hidden');
-                    brandText.classList.add('hidden', 'sm:inline');
-                } else {
-                    logoImg.classList.add('hidden');
-                    brandText.classList.remove('hidden');
-                }
             } catch (e) { showToast("Erro de conexão"); }
         }
 
@@ -468,7 +455,7 @@
                     const bFlavorInput = document.getElementById('borda_flavor_input');
                     const bFlavor = bFlavorInput ? bFlavorInput.value.trim() : '';
                     if(bItem) {
-                        details += ` (Borda de ${bFlavor})`;
+                        details += `\n+ ${bItem.name}${bFlavor ? ` de ${bFlavor}` : ''}`;
                         finalPrice += bItem.price;
                     }
                 }
@@ -603,7 +590,7 @@
                     </div>
 
                     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-                        <h3 class="font-black text-lg mb-4">Observações (Opcional)</h3>
+                        <h3 class="font-black text-lg mb-4">Observações Gerais (Opcional)</h3>
                         <textarea id="observations" rows="2" placeholder="Ex: Mandar troco para R$ 50..." class="w-full border-2 border-gray-300 rounded-lg p-3 outline-none focus:border-andirby-red"></textarea>
                     </div>
 
@@ -891,11 +878,6 @@
                             <input type="number" id="cfg_delivery" value="${state.settings.delivery_fee}" step="0.10" class="border-2 p-2 rounded w-full font-bold">
                         </div>
                         <div class="md:col-span-2">
-                            <label class="text-sm font-bold block mb-1 text-blue-700">Logo do Restaurante (Envio Direto)</label>
-                            <input type="file" id="cfg_logo_file" accept="image/*" class="border-2 p-2 rounded w-full font-mono text-sm bg-blue-50 cursor-pointer">
-                            <p class="text-xs text-gray-500 mt-1">Selecione uma imagem do seu computador/telemóvel. Ela será salva diretamente na sua VPS.</p>
-                        </div>
-                        <div class="md:col-span-2">
                             <label class="text-sm font-bold block mb-1 text-purple-700">Webhook URL (Integração n8n)</label>
                             <input type="text" id="cfg_webhook" value="${state.settings.webhook_url}" placeholder="https://seu-n8n.com/webhook/..." class="border-2 p-2 rounded w-full font-mono text-sm">
                             <p class="text-xs text-gray-500 mt-1">Disparado no novo pedido e a cada alteração de status.</p>
@@ -965,34 +947,16 @@
             const unavailable = [];
             document.querySelectorAll('.flavor-unavailable-chk:checked').forEach(chk => unavailable.push(chk.value));
 
-            const fileInput = document.getElementById('cfg_logo_file');
-            // Mantém a logo atual se não for enviado nenhum ficheiro novo
-            let logo_data = state.settings.logo_url; 
-            
-            const uploadPayload = async () => {
-                const payload = { 
-                    is_open: document.getElementById('cfg_is_open').value,
-                    delivery_fee: document.getElementById('cfg_delivery').value, 
-                    webhook_url: document.getElementById('cfg_webhook').value,
-                    logo_url: logo_data, // Agora envia o base64 diretamente para o campo que o backend reconhece
-                    unavailable_flavors: unavailable
-                };
-                
-                await fetch('/api/admin/settings', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
-                showToast("Configurações salvas!"); 
-                await fetchMenuData();
+            const payload = { 
+                is_open: document.getElementById('cfg_is_open').value,
+                delivery_fee: document.getElementById('cfg_delivery').value, 
+                webhook_url: document.getElementById('cfg_webhook').value,
+                unavailable_flavors: unavailable
             };
-
-            if (fileInput && fileInput.files.length > 0) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    logo_data = e.target.result; // Converte a imagem para base64
-                    uploadPayload();
-                };
-                reader.readAsDataURL(fileInput.files[0]);
-            } else {
-                uploadPayload();
-            }
+            
+            await fetch('/api/admin/settings', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
+            showToast("Configurações salvas!"); 
+            fetchMenuData();
         }
 
         async function updateItem(id) {
