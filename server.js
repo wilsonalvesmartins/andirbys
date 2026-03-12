@@ -210,7 +210,8 @@ app.put('/api/admin/settings', authAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-const PORT = 3000;
+// Atualizado para a porta 3002
+const PORT = 3002;
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
 });
