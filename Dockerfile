@@ -12,7 +12,10 @@ RUN npm install
 # Copia todo o código para dentro do container
 COPY . .
 
-# Expõe a nova porta que o servidor Node vai rodar
+# Define a variável de ambiente para ajudar o Proxy do Coolify a achar a porta
+ENV PORT=3002
+
+# Expõe a porta que o servidor Node vai rodar internamente
 EXPOSE 3002
 
 # Inicia a aplicação
