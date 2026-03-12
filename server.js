@@ -73,11 +73,16 @@ async function initDB() {
         await run(`INSERT INTO settings (key, value) VALUES ('webhook_url', '')`);
         await run(`INSERT INTO settings (key, value) VALUES ('is_open', '1')`);
         await run(`INSERT INTO settings (key, value) VALUES ('unavailable_flavors', '[]')`);
+        await run(`INSERT INTO settings (key, value) VALUES ('logo_url', '')`);
     } else {
         const hasIsOpen = await get(`SELECT value FROM settings WHERE key = 'is_open'`);
         if(!hasIsOpen) await run(`INSERT INTO settings (key, value) VALUES ('is_open', '1')`);
+        
         const hasUnav = await get(`SELECT value FROM settings WHERE key = 'unavailable_flavors'`);
         if(!hasUnav) await run(`INSERT INTO settings (key, value) VALUES ('unavailable_flavors', '[]')`);
+
+        const hasLogo = await get(`SELECT value FROM settings WHERE key = 'logo_url'`);
+        if(!hasLogo) await run(`INSERT INTO settings (key, value) VALUES ('logo_url', '')`);
     }
 
     // Inserir cardápio do PDF se estiver vazio
@@ -94,8 +99,6 @@ async function initDB() {
             ['Pizzas Família (35cm)', '2 Sabores (Salgadas)', '', 59.00],
             ['Pizzas Família (35cm)', '2 Sabores (Salgada e Doce)', '', 61.00],
             ['Pizzas Família (35cm)', '3 Sabores (2 Salgadas e 1 Doce)', '', 64.00],
-            ['Pizza no Prato', '1 Sabor', '', 28.00],
-            ['Pizza no Prato', '2 Sabores', '', 33.00],
             ['Bordas Recheadas', 'Borda Gigante 50cm', '', 16.00],
             ['Bordas Recheadas', 'Borda Família 35cm', '', 14.00],
             ['Esfihas', '1 Unidade', '', 5.00],
@@ -235,12 +238,13 @@ app.put('/api/admin/items/:id', authAdmin, async (req, res) => {
 });
 
 app.put('/api/admin/settings', authAdmin, async (req, res) => {
-    const { delivery_fee, webhook_url, is_open, unavailable_flavors } = req.body;
+    const { delivery_fee, webhook_url, is_open, unavailable_flavors, logo_url } = req.body;
     try {
         await run(`UPDATE settings SET value = ? WHERE key = 'delivery_fee'`, [delivery_fee]);
         await run(`INSERT INTO settings (key, value) VALUES ('webhook_url', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [webhook_url]);
         await run(`INSERT INTO settings (key, value) VALUES ('is_open', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [is_open]);
         await run(`INSERT INTO settings (key, value) VALUES ('unavailable_flavors', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [JSON.stringify(unavailable_flavors)]);
+        await run(`INSERT INTO settings (key, value) VALUES ('logo_url', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [logo_url]);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
