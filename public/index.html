@@ -6,19 +6,15 @@
     <title>Andirby's Pizzaria & Esfiharia</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Correção Definitiva para Impressão Thermal 80mm */
         @media print {
-            body * { visibility: hidden; }
-            #print-area, #print-area * { visibility: visible; }
-            #print-area {
-                position: absolute; left: 0; top: 0; width: 80mm;
-                font-family: monospace; font-size: 14px; color: black;
-                padding: 5mm; margin: 0;
-            }
-            .no-print { display: none !important; }
+            body > *:not(#print-area) { display: none !important; }
+            #print-area { display: block !important; width: 80mm; margin: 0; padding: 0; font-family: monospace; font-size: 13px; color: black; }
+            @page { margin: 0; }
         }
+        
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #b91c1c; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* Cores da Andirby's */
         .bg-andirby-red { background-color: #990000; }
         .text-andirby-yellow { color: #FFCC00; }
         .bg-andirby-yellow { background-color: #FFCC00; }
@@ -27,7 +23,7 @@
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased min-h-screen flex flex-col">
 
-    <nav class="bg-andirby-red text-white shadow-md sticky top-0 z-50">
+    <nav class="bg-andirby-red text-white shadow-md sticky top-0 z-50" id="main-nav">
         <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-2xl font-black text-andirby-yellow tracking-wide flex items-center gap-2 cursor-pointer" onclick="navigate('menu')">
                 🍕 Andirby's
@@ -41,32 +37,66 @@
 
     <main id="app" class="flex-grow max-w-4xl mx-auto w-full px-4 py-6"></main>
 
-    <footer class="bg-gray-900 text-gray-400 py-6 text-center mt-auto border-t-4 border-andirby-red">
+    <footer class="bg-gray-900 text-gray-400 py-6 text-center mt-auto border-t-4 border-andirby-red" id="main-footer">
         <p class="text-sm text-andirby-yellow font-bold">Andirby's Pizzaria & Esfiharia</p>
         <p class="text-xs mt-1">&copy; 2026. Todos os direitos reservados.</p>
         <span onclick="promptAdmin()" class="inline-block mt-2 cursor-pointer opacity-10 hover:opacity-100 transition-opacity" title="Área Restrita">🔒</span>
     </footer>
 
+    <!-- Área exclusiva para Impressão -->
     <div id="print-area" class="hidden"></div>
 
     <script>
-        // --- DADOS DO CARDÁPIO (SABORES) ---
+        // --- DADOS DO CARDÁPIO: INGREDIENTES EXATOS DO PDF ---
         const FLAVORS = {
-            salgadas: ["Andirby's", "Atum", "Alho", "Bauru", "Calabresa", "Calabresa do Chef", "Caliente", "Da Nona", "Da Sogra", "Frango com Catupiry", "Frango com Bacon", "Hollywood", "Hulk", "Damep", "Lombinho", "Marguerita", "Mussarela", "Portuguesa", "Quatro Queijos"],
-            doces: ["Chocolate ao leite", "Banana e Canela", "Romeu e Julieta"],
-            esfihas: ["Alho", "Bacon", "Carne", "Calabresa", "Frango c/ Catupiry", "Frango c/ Cheddar", "Presunto e Queijo", "Banana c/ Canela", "Chocolate ao leite", "Chocolate Branco", "Romeu e Julieta"]
+            salgadas: [
+                { name: "Andirby's", desc: "Frango, molho de tomate, mussarela, tomate, milho, ervilha, catupiry, cheddar, salaminho, cebola, orégano e azeitonas" },
+                { name: "Atum", desc: "Atum, molho de tomate, mussarela, tomate, cebola, orégano e azeitonas" },
+                { name: "Alho", desc: "Alho, molho de tomate, mussarela, tomate, cebola, orégano e azeitonas" },
+                { name: "Bauru", desc: "Presunto, molho de tomate, mussarela, tomate, cebola, orégano e azeitonas" },
+                { name: "Calabresa", desc: "Linguiça Calabresa, molho de tomate, mussarela, tomate, cebola, orégano e azeitonas" },
+                { name: "Calabresa do Chef", desc: "Linguiça Calabresa, cream cheese, bacon, molho de tomate, mussarela, tomate, cebola, orégano e azeitonas" },
+                { name: "Caliente", desc: "Linguiça Calabresa, pimenta baiana, molho de tomate, mussarela, tomate, cebola" },
+                { name: "Da Nona", desc: "Presunto, mussarela, milho, molho de tomate, orégano e azeitonas" },
+                { name: "Da Sogra", desc: "Carne Moída a moda do chef, pimentão, molho de tomate, mussarela, tomate picado, cebola, orégano e azeitonas" },
+                { name: "Frango com Catupiry", desc: "Frango, catupiry, molho de tomate, mussarela, tomate, orégano e azeitonas" },
+                { name: "Frango com Bacon", desc: "Frango, bacon, molho de tomate, mussarela, tomate, orégano e azeitonas" },
+                { name: "Hollywood", desc: "Presunto enrolado com mussarela, bacon, cream cheese, molho de tomate, milho, ervilha, tomate, orégano e azeitonas" },
+                { name: "Hulk", desc: "Rúcula, tomate seco, molho de tomate, milho, orégano e azeitonas" },
+                { name: "Damep", desc: "Brócolis, bacon, tomate seco, requeijão, molho de tomate, mussarela, tomate cereja, milho, orégano e azeitonas" },
+                { name: "Lombinho", desc: "Lombinho, molho de tomate, mussarela, tomate, milho, orégano e azeitonas" },
+                { name: "Marguerita", desc: "Mussarela, folhas de manjericão, molho de tomate, tomate cereja, orégano e azeitonas" },
+                { name: "Mussarela", desc: "Mussarela, molho de tomate, rodelas de tomate, orégano e azeitonas" },
+                { name: "Portuguesa", desc: "Presunto, mussarela, ovos, molho de tomate, milho, ervilha, cebola, orégano e azeitonas" },
+                { name: "Quatro Queijos", desc: "Mussarela, gorgonzola, catupiry, parmesão, molho de tomate, orégano e azeitonas" }
+            ],
+            doces: [
+                { name: "Chocolate ao leite", desc: "Chocolate, granulado e morango" },
+                { name: "Banana e Canela", desc: "Banana, canela, mussarela, açúcar e leite condensado" },
+                { name: "Romeu e Julieta", desc: "Mussarela e goiaba" }
+            ],
+            esfihas: [
+                { name: "Alho" }, { name: "Bacon" }, { name: "Carne" }, { name: "Calabresa" }, 
+                { name: "Frango c/ Catupiry" }, { name: "Frango c/ Cheddar" }, { name: "Presunto e Queijo" }, 
+                { name: "Banana c/ Canela" }, { name: "Chocolate ao leite" }, { name: "Chocolate Branco" }, { name: "Romeu e Julieta" }
+            ]
         };
 
         const state = {
             view: 'menu',
             items: [],
-            settings: { delivery_fee: 0, webhook_url: '' },
+            settings: { delivery_fee: 0, webhook_url: '', is_open: '1', unavailable_flavors: [] },
             cart: [],
             userData: { whatsapp: '', name: '', address: '' },
             adminToken: localStorage.getItem('adminToken') || null,
             adminOrders: [],
-            modalItem: null // Guarda o item atual sendo configurado no modal
+            modalItem: null
         };
+
+        // --- SISTEMA DE NOTIFICAÇÃO SONORA E POLLING ---
+        const bellSound = new Audio('https://actions.google.com/sounds/v1/alarms/doorbell.ogg');
+        let orderPollingInterval = null;
+        let lastKnownOrderId = 0;
 
         async function init() {
             await fetchMenuData();
@@ -80,6 +110,8 @@
                 state.items = data.items;
                 state.settings.delivery_fee = parseFloat(data.settings.delivery_fee) || 0;
                 state.settings.webhook_url = data.settings.webhook_url || '';
+                state.settings.is_open = data.settings.is_open || '1';
+                state.settings.unavailable_flavors = data.settings.unavailable_flavors ? JSON.parse(data.settings.unavailable_flavors) : [];
             } catch (e) { showToast("Erro de conexão"); }
         }
 
@@ -102,10 +134,31 @@
         }
 
         function formatMoney(value) { return `R$ ${parseFloat(value).toFixed(2).replace('.', ',')}`; }
+        
+        // Conversão exata de fuso horário UTC do Banco para Brasília
+        function formatDate(dateString) {
+            const d = new Date(dateString + 'Z');
+            return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        }
 
         function renderMenu() {
-            let html = `<div class="mb-6"><h2 class="text-3xl font-black text-andirby-red">Cardápio</h2><p class="text-gray-500 font-bold">Faça seu pedido conosco!</p></div>`;
+            let html = `
+                <div class="mb-6">
+                    <h2 class="text-3xl font-black text-andirby-red">Cardápio</h2>
+                    ${state.settings.is_open === '0' ? 
+                        `<div class="bg-red-100 text-red-800 p-3 rounded-lg border border-red-300 font-bold mt-2">⚠️ O Restaurante está fechado no momento.</div>` : 
+                        `<p class="text-gray-500 font-bold">Faça seu pedido conosco!</p>`}
+                </div>`;
+            
+            // Reordenamento Correto exigido: Bebidas por último, Bordas Recheadas em penúltimo
             const categories = [...new Set(state.items.map(i => i.category))];
+            const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Pizza no Prato', 'Esfihas', 'Outros', 'Bordas Recheadas', 'Bebidas'];
+            categories.sort((a, b) => {
+                let idxA = catOrder.findIndex(c => a.includes(c));
+                let idxB = catOrder.findIndex(c => b.includes(c));
+                if(idxA === -1) idxA = 99; if(idxB === -1) idxB = 99;
+                return idxA - idxB;
+            });
             
             categories.forEach(cat => {
                 html += `<h3 class="text-xl font-bold text-andirby-red mt-8 mb-4 border-b-2 border-red-200 pb-2 flex items-center gap-2">🍕 ${cat}</h3>`;
@@ -148,7 +201,7 @@
             return html;
         }
 
-        // --- LÓGICA DO MODAL DE SABORES ---
+        // --- LÓGICA DO MODAL (Sem quebras de aspas) ---
         let modalSelections = []; 
         let modalMax = 1;
 
@@ -163,32 +216,45 @@
             const body = document.getElementById('modal-body');
             
             if (item.category.includes('Pizzas')) {
-                // Descobrir quantos sabores
                 modalMax = 1;
                 if(item.name.includes('2 Sabores')) modalMax = 2;
                 if(item.name.includes('3 Sabores')) modalMax = 3;
                 
                 let html = `<p class="mb-4 text-sm bg-yellow-100 p-2 rounded text-yellow-800 font-bold">Escolha até ${modalMax} sabor(es):</p>`;
                 
-                // Listar Salgadas
+                // Lista Salgadas - Passando ÍNDICE no onclick para evitar bug de aspas na string
                 html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Salgadas</h4><div class="space-y-2">`;
-                FLAVORS.salgadas.forEach(f => {
+                FLAVORS.salgadas.forEach((f, idx) => {
+                    const isUnavailable = state.settings.unavailable_flavors.includes(f.name);
                     html += `
-                        <label class="flex items-center p-2 border rounded cursor-pointer hover:bg-gray-50" onclick="togglePizzaFlavor('${f}')">
-                            <input type="checkbox" id="chk_${f.replace(/\s/g,'')}" class="w-5 h-5 text-red-600 mr-3 pointer-events-none">
-                            <span class="font-bold text-gray-700">${f}</span>
-                        </label>`;
+                        <div class="p-3 border rounded ${isUnavailable ? 'bg-gray-100 opacity-50' : 'hover:bg-gray-50 cursor-pointer'}" 
+                             ${!isUnavailable ? `onclick="togglePizzaFlavor(${idx}, 'salgadas')"` : ''}>
+                            <div class="flex items-start">
+                                <input type="checkbox" id="chk_salgadas_${idx}" class="w-5 h-5 text-red-600 mt-1 mr-3 pointer-events-none" ${isUnavailable ? 'disabled' : ''}>
+                                <div>
+                                    <span class="font-bold text-gray-800 block">${f.name} ${isUnavailable ? '<span class="text-xs text-red-600">(Esgotado)</span>' : ''}</span>
+                                    ${f.desc ? `<p class="text-xs text-gray-500 italic mt-1 leading-tight">${f.desc}</p>` : ''}
+                                </div>
+                            </div>
+                        </div>`;
                 });
                 html += `</div>`;
                 
-                // Listar Doces
+                // Lista Doces
                 html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Doces</h4><div class="space-y-2">`;
-                FLAVORS.doces.forEach(f => {
+                FLAVORS.doces.forEach((f, idx) => {
+                    const isUnavailable = state.settings.unavailable_flavors.includes(f.name);
                     html += `
-                        <label class="flex items-center p-2 border rounded cursor-pointer hover:bg-gray-50" onclick="togglePizzaFlavor('${f}')">
-                            <input type="checkbox" id="chk_${f.replace(/\s/g,'')}" class="w-5 h-5 text-red-600 mr-3 pointer-events-none">
-                            <span class="font-bold text-gray-700">${f}</span>
-                        </label>`;
+                        <div class="p-3 border rounded ${isUnavailable ? 'bg-gray-100 opacity-50' : 'hover:bg-gray-50 cursor-pointer'}" 
+                             ${!isUnavailable ? `onclick="togglePizzaFlavor(${idx}, 'doces')"` : ''}>
+                            <div class="flex items-start">
+                                <input type="checkbox" id="chk_doces_${idx}" class="w-5 h-5 text-red-600 mt-1 mr-3 pointer-events-none" ${isUnavailable ? 'disabled' : ''}>
+                                <div>
+                                    <span class="font-bold text-gray-800 block">${f.name} ${isUnavailable ? '<span class="text-xs text-red-600">(Esgotado)</span>' : ''}</span>
+                                    ${f.desc ? `<p class="text-xs text-gray-500 italic mt-1 leading-tight">${f.desc}</p>` : ''}
+                                </div>
+                            </div>
+                        </div>`;
                 });
                 html += `</div>`;
                 
@@ -200,20 +266,20 @@
                 if(item.name.includes('10')) modalMax = 10;
                 if(item.name.includes('20')) modalMax = 20;
 
-                // Para Esfihas, transformamos modalSelections em um dicionário { Sabor: quantidade }
                 modalSelections = {};
-                FLAVORS.esfihas.forEach(f => modalSelections[f] = 0);
+                FLAVORS.esfihas.forEach(f => modalSelections[f.name] = 0);
 
                 let html = `<p class="mb-4 text-sm bg-yellow-100 p-2 rounded text-yellow-800 font-bold" id="esfiha-counter">Faltam escolher: ${modalMax}</p>`;
                 html += `<div class="space-y-3">`;
-                FLAVORS.esfihas.forEach(f => {
+                FLAVORS.esfihas.forEach((f, idx) => {
+                    const isUnavailable = state.settings.unavailable_flavors.includes(f.name);
                     html += `
-                        <div class="flex justify-between items-center p-2 border rounded bg-white">
-                            <span class="font-bold text-gray-700">${f}</span>
+                        <div class="flex justify-between items-center p-2 border rounded ${isUnavailable ? 'bg-gray-100 opacity-50' : 'bg-white'}">
+                            <span class="font-bold text-gray-700">${f.name} ${isUnavailable ? '<small class="text-red-500">(Esgotado)</small>' : ''}</span>
                             <div class="flex items-center gap-3">
-                                <button onclick="changeEsfihaQty('${f}', -1)" class="w-8 h-8 bg-gray-200 rounded font-bold text-xl flex items-center justify-center">-</button>
-                                <span id="qty_${f.replace(/\s/g,'')}" class="font-bold w-4 text-center">0</span>
-                                <button onclick="changeEsfihaQty('${f}', 1)" class="w-8 h-8 bg-andirby-yellow rounded font-bold text-xl flex items-center justify-center">+</button>
+                                <button onclick="changeEsfihaQty(${idx}, -1)" class="w-8 h-8 bg-gray-200 rounded font-bold text-xl flex items-center justify-center" ${isUnavailable ? 'disabled' : ''}>-</button>
+                                <span id="qty_esfiha_${idx}" class="font-bold w-4 text-center">0</span>
+                                <button onclick="changeEsfihaQty(${idx}, 1)" class="w-8 h-8 bg-andirby-yellow rounded font-bold text-xl flex items-center justify-center" ${isUnavailable ? 'disabled' : ''}>+</button>
                             </div>
                         </div>`;
                 });
@@ -225,21 +291,28 @@
             document.getElementById('config-modal').classList.remove('hidden');
         }
 
-        function togglePizzaFlavor(flavor) {
-            const idx = modalSelections.indexOf(flavor);
-            if (idx > -1) {
-                modalSelections.splice(idx, 1);
+        function togglePizzaFlavor(idx, type) {
+            const flavorObj = FLAVORS[type][idx];
+            const flavorName = flavorObj.name;
+            const pos = modalSelections.indexOf(flavorName);
+            
+            if (pos > -1) {
+                modalSelections.splice(pos, 1);
             } else {
                 if (modalSelections.length < modalMax) {
-                    modalSelections.push(flavor);
+                    modalSelections.push(flavorName);
                 } else {
                     showToast(`Máximo de ${modalMax} sabores permitidos!`);
                 }
             }
-            // Atualizar UI dos checkboxes
-            [...FLAVORS.salgadas, ...FLAVORS.doces].forEach(f => {
-                const chk = document.getElementById(`chk_${f.replace(/\s/g,'')}`);
-                if(chk) chk.checked = modalSelections.includes(f);
+            // Atualizar UI
+            FLAVORS.salgadas.forEach((f, i) => {
+                const chk = document.getElementById(`chk_salgadas_${i}`);
+                if(chk) chk.checked = modalSelections.includes(f.name);
+            });
+            FLAVORS.doces.forEach((f, i) => {
+                const chk = document.getElementById(`chk_doces_${i}`);
+                if(chk) chk.checked = modalSelections.includes(f.name);
             });
             renderModalFooterPizza();
         }
@@ -253,16 +326,18 @@
             document.getElementById('modal-footer').innerHTML = btn;
         }
 
-        function changeEsfihaQty(flavor, diff) {
+        function changeEsfihaQty(idx, diff) {
+            const flavorName = FLAVORS.esfihas[idx].name;
             const currentTotal = Object.values(modalSelections).reduce((a, b) => a + b, 0);
+            
             if (diff > 0 && currentTotal >= modalMax) {
                 showToast(`Limite de ${modalMax} atingido!`);
                 return;
             }
-            if (diff < 0 && modalSelections[flavor] <= 0) return;
+            if (diff < 0 && modalSelections[flavorName] <= 0) return;
 
-            modalSelections[flavor] += diff;
-            document.getElementById(`qty_${flavor.replace(/\s/g,'')}`).innerText = modalSelections[flavor];
+            modalSelections[flavorName] += diff;
+            document.getElementById(`qty_esfiha_${idx}`).innerText = modalSelections[flavorName];
             
             const newTotal = Object.values(modalSelections).reduce((a, b) => a + b, 0);
             document.getElementById('esfiha-counter').innerText = `Faltam escolher: ${modalMax - newTotal}`;
@@ -300,7 +375,7 @@
             
             closeModal();
             render();
-            showToast("Item adicionado com sucesso!");
+            showToast("Adicionado!");
         }
 
         function closeModal() {
@@ -358,7 +433,8 @@
                         <span>Subtotal:</span>
                         <span class="text-andirby-red">${formatMoney(subtotal)}</span>
                     </div>
-                    <button onclick="navigate('checkout')" class="w-full bg-green-600 text-white py-4 rounded-lg font-black text-lg hover:bg-green-700 transition shadow-lg">
+                    <button onclick="${state.settings.is_open === '1' ? "navigate('checkout')" : "alert('Restaurante Fechado no momento.')"}" 
+                            class="w-full ${state.settings.is_open === '1' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-400 text-white cursor-not-allowed'} py-4 rounded-lg font-black text-lg transition shadow-lg">
                         Finalizar Pedido
                     </button>
                 </div>
@@ -448,6 +524,8 @@
 
         async function submitOrder(e) {
             e.preventDefault();
+            if(state.settings.is_open === '0') return alert("Desculpe, restaurante fechado.");
+            
             const payload = {
                 whatsapp: document.getElementById('whatsapp').value.replace(/\D/g, ''),
                 name: document.getElementById('name').value,
@@ -475,7 +553,7 @@
             } catch(err) { alert("Erro de conexão."); }
         }
 
-        // --- PAINEL ADMIN ---
+        // --- PAINEL ADMIN E AUTO-REFRESH ---
         function promptAdmin() {
             const pwd = prompt("Senha:");
             if(pwd === "andirbys2026") {
@@ -492,14 +570,54 @@
                 const res = await fetch('/api/admin/orders', { headers: authHeaders() });
                 if(res.status === 401) { navigate('menu'); return; }
                 state.adminOrders = await res.json();
+                
+                // Grava o último ID ao entrar para não apitar pedidos velhos
+                if(state.adminOrders.length > 0) {
+                    lastKnownOrderId = state.adminOrders[0].id;
+                }
+
                 app.innerHTML = renderAdminOrders();
+                startAdminPolling(); // Inicia o loop de atualização automática!
             } catch(e) { navigate('menu'); }
+        }
+
+        // Função de Polling (Auto-Refresh com Áudio)
+        function startAdminPolling() {
+            if(orderPollingInterval) clearInterval(orderPollingInterval);
+            
+            orderPollingInterval = setInterval(async () => {
+                if(state.view !== 'admin_orders') return; // só atua se estiver na aba de pedidos
+                
+                try {
+                    const res = await fetch('/api/admin/orders', { headers: authHeaders() });
+                    if(!res.ok) return;
+                    
+                    const newOrders = await res.json();
+                    
+                    if(newOrders.length > 0) {
+                        const latestId = newOrders[0].id;
+                        // Verifica se existe um ID maior do que o que conhecemos
+                        if(lastKnownOrderId > 0 && latestId > lastKnownOrderId) {
+                            bellSound.play().catch(e => console.log("Áudio bloqueado pelo navegador"));
+                            showToast("🔔 NOVO PEDIDO RECEBIDO!");
+                        }
+                        lastKnownOrderId = latestId;
+                    }
+                    
+                    // Compara se o conteúdo da lista mudou. Se sim, atualiza a tela de forma silenciosa.
+                    // Isso evita que a tela pisque ou feche as caixas de seleção que você estiver mexendo.
+                    if(JSON.stringify(state.adminOrders) !== JSON.stringify(newOrders)) {
+                        state.adminOrders = newOrders;
+                        document.getElementById('app').innerHTML = renderAdminOrders();
+                    }
+                } catch(e) {}
+            }, 45000); // 45000 ms = Checa a cada 45 segundos
         }
 
         function renderAdminNav() {
             return `
                 <div class="flex gap-4 mb-6 border-b pb-4">
-                    <button onclick="navigate('admin_orders')" class="${state.view==='admin_orders'?'font-black text-andirby-red border-b-4 border-andirby-red':'text-gray-500 font-bold'} pb-1">Pedidos</button>
+                    <button onclick="navigate('admin_orders')" class="${state.view==='admin_orders'?'font-black text-andirby-red border-b-4 border-andirby-red':'text-gray-500 font-bold'} pb-1">Pedidos <span class="text-xs text-green-500 ml-1 animate-pulse" title="Atualização ao vivo ativada">● Live</span></button>
                     <button onclick="navigate('admin_menu')" class="${state.view==='admin_menu'?'font-black text-andirby-red border-b-4 border-andirby-red':'text-gray-500 font-bold'} pb-1">Configurações</button>
                     <button onclick="navigate('menu')" class="ml-auto text-sm bg-gray-800 text-white px-3 py-1 rounded font-bold">Sair do Painel</button>
                 </div>`;
@@ -517,8 +635,8 @@
                 html += `
                     <div class="bg-white p-4 rounded-lg shadow-md border-l-8 ${order.status==='Pendente'?'border-yellow-400':(order.status==='Concluído'?'border-green-500':'border-blue-500')}">
                         <div class="flex justify-between border-b pb-2 mb-2">
-                            <div><span class="font-black text-lg">#${order.id} - ${order.customer_name}</span><p class="text-sm text-gray-500">📱 ${order.customer_whatsapp} | 🕒 ${new Date(order.created_at).toLocaleString()}</p></div>
-                            <select onchange="updateOrderStatus(${order.id}, this.value)" class="text-sm border-2 rounded p-1 font-bold ${colors[order.status]||'bg-gray-100'}">
+                            <div><span class="font-black text-lg">#${order.id} - ${order.customer_name}</span><p class="text-sm text-gray-500">📱 ${order.customer_whatsapp} | 🕒 ${formatDate(order.created_at)}</p></div>
+                            <select onchange="updateOrderStatus(${order.id}, this.value)" class="text-sm border-2 rounded p-1 font-bold ${colors[order.status]||'bg-gray-100'} h-8">
                                 <option ${order.status==='Pendente'?'selected':''}>Pendente</option><option ${order.status==='Preparando'?'selected':''}>Preparando</option><option ${order.status==='Enviado'?'selected':''}>Enviado</option><option ${order.status==='Concluído'?'selected':''}>Concluído</option>
                             </select>
                         </div>
@@ -540,17 +658,18 @@
         async function updateOrderStatus(id, status) {
             const order = state.adminOrders.find(o => o.id === id);
             await fetch(`/api/admin/orders/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status, customer_name: order.customer_name, customer_address: order.customer_address }) });
-            showToast("Status salvo!");
+            showToast("Status e Webhook enviados!");
         }
         async function deleteOrder(id) {
             if(confirm("Apagar pedido?")) { await fetch(`/api/admin/orders/${id}`, { method: 'DELETE', headers: authHeaders() }); loadAdminOrders(); }
         }
 
+        // Impressão Perfeita: Injeta os dados no #print-area e aciona nativamente
         function printOrder(id) {
             const order = state.adminOrders.find(o => o.id === id);
             const items = JSON.parse(order.items_json);
             let printHtml = `
-                <div style="text-align:center;margin-bottom:10px;font-weight:bold;">ANDIRBY'S PIZZARIA<br>Pedido #${order.id}<br>${new Date(order.created_at).toLocaleString()}</div>
+                <div style="text-align:center;margin-bottom:10px;font-weight:bold;">ANDIRBY'S PIZZARIA<br>Pedido #${order.id}<br>${formatDate(order.created_at)}</div>
                 <div style="border-top:1px dashed black;border-bottom:1px dashed black;padding:5px 0;margin-bottom:10px;">
                     <strong>Cli:</strong> ${order.customer_name}<br><strong>Tel:</strong> ${order.customer_whatsapp}<br><strong>Tipo:</strong> ${order.type}<br>${order.type==='Entrega'?`<strong>End:</strong> ${order.customer_address}`:''}
                 </div>
@@ -558,30 +677,51 @@
                     ${items.map(i => `<tr><td style="padding-bottom:5px;"><b>${i.name}</b><br><small>${i.details||''}</small></td><td style="text-align:right;vertical-align:top;">${formatMoney(i.price)}</td></tr>`).join('')}
                 </table>
                 <div style="border-top:1px dashed black;padding-top:5px;text-align:right;">Subtotal: ${formatMoney(order.subtotal)}<br>${order.type==='Entrega'?`Taxa: ${formatMoney(order.delivery_fee)}<br>`:''}<strong>TOTAL: ${formatMoney(order.total)}</strong></div>
+                <div style="text-align:center;margin-top:15px;font-size:11px;">Obrigado pela preferência!</div>
             `;
-            document.getElementById('print-area').innerHTML = printHtml; window.print();
+            document.getElementById('print-area').innerHTML = printHtml; 
+            window.print();
         }
 
         function renderAdminMenu() {
-            let html = renderAdminNav() + `<h2 class="text-2xl font-black mb-6">Configurações Base</h2>`;
+            let html = renderAdminNav() + `<h2 class="text-2xl font-black mb-6">Configurações & Gestão</h2>`;
             
             html += `
                 <div class="bg-white p-5 rounded-lg shadow mb-8 border-t-4 border-andirby-yellow">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="text-sm font-bold block mb-1">Status do Restaurante</label>
+                            <select id="cfg_is_open" class="border-2 p-2 rounded w-full font-bold ${state.settings.is_open === '1' ? 'bg-green-100' : 'bg-red-100'}">
+                                <option value="1" ${state.settings.is_open === '1' ? 'selected' : ''}>🟢 Aberto - Aceitando Pedidos</option>
+                                <option value="0" ${state.settings.is_open === '0' ? 'selected' : ''}>🔴 Fechado - Bloquear Carrinho</option>
+                            </select>
+                        </div>
                         <div>
                             <label class="text-sm font-bold block mb-1">Taxa de Entrega (R$)</label>
                             <input type="number" id="cfg_delivery" value="${state.settings.delivery_fee}" step="0.10" class="border-2 p-2 rounded w-full font-bold">
                         </div>
-                        <div>
+                        <div class="md:col-span-2">
                             <label class="text-sm font-bold block mb-1 text-purple-700">Webhook URL (Integração n8n)</label>
                             <input type="text" id="cfg_webhook" value="${state.settings.webhook_url}" placeholder="https://seu-n8n.com/webhook/..." class="border-2 p-2 rounded w-full font-mono text-sm">
-                            <p class="text-xs text-gray-500 mt-1">Disparado automaticamente ao criar um pedido.</p>
+                            <p class="text-xs text-gray-500 mt-1">Disparado no novo pedido e a cada alteração de status.</p>
                         </div>
                     </div>
-                    <button onclick="saveSettings()" class="mt-4 bg-andirby-red text-white px-4 py-2 rounded font-black hover-bg-andirby-red">Salvar Configurações</button>
+                    
+                    <h3 class="font-bold text-red-600 border-t pt-4 mb-2">Sabores Indisponíveis (Esgotados)</h3>
+                    <p class="text-xs text-gray-500 mb-3">Marque os sabores que acabaram para bloquear no site.</p>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 border rounded">
+                        ${[...FLAVORS.salgadas, ...FLAVORS.doces, ...FLAVORS.esfihas].map(f => `
+                            <label class="flex items-center space-x-2 text-sm">
+                                <input type="checkbox" class="flavor-unavailable-chk" value="${f.name}" ${state.settings.unavailable_flavors.includes(f.name) ? 'checked' : ''}>
+                                <span class="truncate" title="${f.name}">${f.name}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+
+                    <button onclick="saveSettings()" class="mt-6 bg-andirby-red text-white px-4 py-3 rounded font-black hover-bg-andirby-red w-full">Salvar Configurações</button>
                 </div>
                 
-                <h3 class="font-black text-xl mb-4 border-b pb-2">Preços do Cardápio</h3>
+                <h3 class="font-black text-xl mb-4 border-b pb-2">Preços do Cardápio Base</h3>
                 <div class="space-y-3">
             `;
 
@@ -591,9 +731,6 @@
                         <span class="font-bold text-gray-500 w-48 truncate" title="${item.category}">${item.category}</span>
                         <input type="text" id="edit_name_${item.id}" value="${item.name}" class="border-2 p-1 rounded font-bold flex-grow min-w-[200px]">
                         <input type="number" id="edit_price_${item.id}" value="${item.price}" step="0.10" class="border-2 p-1 rounded w-28 font-bold text-andirby-red">
-                        <select id="edit_active_${item.id}" class="border-2 p-1 rounded font-bold w-24">
-                            <option value="1" ${item.active ? 'selected':''}>Ativo</option><option value="0" ${!item.active ? 'selected':''}>Inativo</option>
-                        </select>
                         <button onclick="updateItem(${item.id})" class="bg-gray-800 text-white px-4 py-1 rounded font-bold hover:bg-black">Salvar</button>
                     </div>`;
             });
@@ -601,21 +738,32 @@
         }
 
         async function saveSettings() {
-            const payload = { delivery_fee: document.getElementById('cfg_delivery').value, webhook_url: document.getElementById('cfg_webhook').value };
+            // Pegar sabores marcados como indisponíveis
+            const unavailable = [];
+            document.querySelectorAll('.flavor-unavailable-chk:checked').forEach(chk => unavailable.push(chk.value));
+
+            const payload = { 
+                is_open: document.getElementById('cfg_is_open').value,
+                delivery_fee: document.getElementById('cfg_delivery').value, 
+                webhook_url: document.getElementById('cfg_webhook').value,
+                unavailable_flavors: unavailable
+            };
+            
             await fetch('/api/admin/settings', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
-            showToast("Configurações salvas!"); fetchMenuData();
+            showToast("Configurações salvas!"); 
+            fetchMenuData(); // recarrega p/ aplicar is_open/flavors
         }
 
         async function updateItem(id) {
             const item = state.items.find(i => i.id === id);
             const payload = {
-                category: item.category, // Não permitimos mudar categoria aqui p/ não quebrar a lógica
+                category: item.category, 
                 name: document.getElementById(`edit_name_${id}`).value,
                 price: parseFloat(document.getElementById(`edit_price_${id}`).value),
-                active: parseInt(document.getElementById(`edit_active_${id}`).value)
+                active: 1
             };
             await fetch(`/api/admin/items/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
-            await fetchMenuData(); showToast("Item atualizado!");
+            await fetchMenuData(); showToast("Preço atualizado!");
         }
 
         function showToast(msg) {
