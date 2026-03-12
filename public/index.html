@@ -39,7 +39,8 @@
     <footer class="bg-gray-900 text-gray-400 py-6 text-center mt-auto border-t-4 border-andirby-red" id="main-footer">
         <p class="text-sm text-andirby-yellow font-bold">Andirby's Pizzaria & Esfiharia</p>
         <p class="text-xs mt-1">&copy; 2026. Todos os direitos reservados.</p>
-        <span onclick="promptAdmin()" class="inline-block mt-2 cursor-pointer opacity-10 hover:opacity-100 transition-opacity" title="Área Restrita">🔒</span>
+        <!-- A função onClick agora desbloqueia o áudio antes de pedir a senha -->
+        <span onclick="unlockAudioAndPromptAdmin()" class="inline-block mt-2 cursor-pointer opacity-10 hover:opacity-100 transition-opacity" title="Área Restrita">🔒</span>
     </footer>
 
     <!-- Área exclusiva para Impressão -->
@@ -92,9 +93,10 @@
             modalItem: null
         };
 
-        const bellSound = new Audio('https://actions.google.com/sounds/v1/alarms/doorbell.ogg');
+        // Arquivo .mp3 universal para garantia de compatibilidade com Apple e Android
+        const bellSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
         let orderPollingInterval = null;
-        let lastKnownOrderId = 0;
+        let lastKnownOrderId = -1; // -1 significa que ainda não inicializamos
 
         async function init() {
             await fetchMenuData();
@@ -214,17 +216,13 @@
                 if(item.name.includes('2 Sabores')) modalMax = 2;
                 if(item.name.includes('3 Sabores')) modalMax = 3;
 
-                // --- NOVA LÓGICA DE FILTRO SALGADA/DOCE ---
                 let showSalgadas = true;
                 let showDoces = true;
                 const nameLower = item.name.toLowerCase();
 
-                // Se o nome contém "salgada", mas não contém "doce", oculta as doces.
                 if (nameLower.includes('salgada') && !nameLower.includes('doce')) {
                     showDoces = false;
-                } 
-                // Se o nome contém "doce", mas não contém "salgada", oculta as salgadas.
-                else if (nameLower.includes('doce') && !nameLower.includes('salgada')) {
+                } else if (nameLower.includes('doce') && !nameLower.includes('salgada')) {
                     showSalgadas = false;
                 }
                 
@@ -563,6 +561,17 @@
             } catch(err) { alert("Erro de conexão."); }
         }
 
+        // Função responsável por destravar a segurança de som do navegador ao clicar no cadeado
+        function unlockAudioAndPromptAdmin() {
+            bellSound.play().then(() => {
+                bellSound.pause();
+                bellSound.currentTime = 0;
+            }).catch(() => {});
+            
+            // Dá um tempo minúsculo para a permissão ser processada antes de abrir o popup de senha
+            setTimeout(promptAdmin, 100);
+        }
+
         function promptAdmin() {
             const pwd = prompt("Senha:");
             if(pwd === "andirbys2026") {
@@ -582,6 +591,9 @@
                 
                 if(state.adminOrders.length > 0) {
                     lastKnownOrderId = state.adminOrders[0].id;
+                } else {
+                    // Previne o bug de não tocar se o banco estiver vazio no primeiro pedido
+                    lastKnownOrderId = 0;
                 }
 
                 app.innerHTML = renderAdminOrders();
@@ -603,7 +615,9 @@
                     
                     if(newOrders.length > 0) {
                         const latestId = newOrders[0].id;
-                        if(lastKnownOrderId > 0 && latestId > lastKnownOrderId) {
+                        if(lastKnownOrderId !== -1 && latestId > lastKnownOrderId) {
+                            // Volta a campainha pro zero e dá Play
+                            bellSound.currentTime = 0;
                             bellSound.play().catch(e => console.log("Áudio bloqueado pelo navegador"));
                             showToast("🔔 NOVO PEDIDO RECEBIDO!");
                         }
