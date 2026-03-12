@@ -6,7 +6,6 @@
     <title>Andirby's Pizzaria & Esfiharia</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Correção Definitiva para Impressão Thermal 80mm */
         @media print {
             body > *:not(#print-area) { display: none !important; }
             #print-area { display: block !important; width: 80mm; margin: 0; padding: 0; font-family: monospace; font-size: 13px; color: black; }
@@ -93,7 +92,6 @@
             modalItem: null
         };
 
-        // --- SISTEMA DE NOTIFICAÇÃO SONORA E POLLING ---
         const bellSound = new Audio('https://actions.google.com/sounds/v1/alarms/doorbell.ogg');
         let orderPollingInterval = null;
         let lastKnownOrderId = 0;
@@ -135,7 +133,6 @@
 
         function formatMoney(value) { return `R$ ${parseFloat(value).toFixed(2).replace('.', ',')}`; }
         
-        // Conversão exata de fuso horário UTC do Banco para Brasília
         function formatDate(dateString) {
             const d = new Date(dateString + 'Z');
             return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -150,7 +147,6 @@
                         `<p class="text-gray-500 font-bold">Faça seu pedido conosco!</p>`}
                 </div>`;
             
-            // Reordenamento Correto exigido: Bebidas por último, Bordas Recheadas em penúltimo
             const categories = [...new Set(state.items.map(i => i.category))];
             const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Pizza no Prato', 'Esfihas', 'Outros', 'Bordas Recheadas', 'Bebidas'];
             categories.sort((a, b) => {
@@ -182,7 +178,6 @@
                 html += `</div>`;
             });
 
-            // Container do Modal
             html += `
                 <div id="config-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden z-50 flex items-center justify-center p-4">
                     <div class="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col border-t-8 border-andirby-red">
@@ -201,7 +196,6 @@
             return html;
         }
 
-        // --- LÓGICA DO MODAL (Sem quebras de aspas) ---
         let modalSelections = []; 
         let modalMax = 1;
 
@@ -219,44 +213,60 @@
                 modalMax = 1;
                 if(item.name.includes('2 Sabores')) modalMax = 2;
                 if(item.name.includes('3 Sabores')) modalMax = 3;
+
+                // --- NOVA LÓGICA DE FILTRO SALGADA/DOCE ---
+                let showSalgadas = true;
+                let showDoces = true;
+                const nameLower = item.name.toLowerCase();
+
+                // Se o nome contém "salgada", mas não contém "doce", oculta as doces.
+                if (nameLower.includes('salgada') && !nameLower.includes('doce')) {
+                    showDoces = false;
+                } 
+                // Se o nome contém "doce", mas não contém "salgada", oculta as salgadas.
+                else if (nameLower.includes('doce') && !nameLower.includes('salgada')) {
+                    showSalgadas = false;
+                }
                 
                 let html = `<p class="mb-4 text-sm bg-yellow-100 p-2 rounded text-yellow-800 font-bold">Escolha até ${modalMax} sabor(es):</p>`;
                 
-                // Lista Salgadas - Passando ÍNDICE no onclick para evitar bug de aspas na string
-                html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Salgadas</h4><div class="space-y-2">`;
-                FLAVORS.salgadas.forEach((f, idx) => {
-                    const isUnavailable = state.settings.unavailable_flavors.includes(f.name);
-                    html += `
-                        <div class="p-3 border rounded ${isUnavailable ? 'bg-gray-100 opacity-50' : 'hover:bg-gray-50 cursor-pointer'}" 
-                             ${!isUnavailable ? `onclick="togglePizzaFlavor(${idx}, 'salgadas')"` : ''}>
-                            <div class="flex items-start">
-                                <input type="checkbox" id="chk_salgadas_${idx}" class="w-5 h-5 text-red-600 mt-1 mr-3 pointer-events-none" ${isUnavailable ? 'disabled' : ''}>
-                                <div>
-                                    <span class="font-bold text-gray-800 block">${f.name} ${isUnavailable ? '<span class="text-xs text-red-600">(Esgotado)</span>' : ''}</span>
-                                    ${f.desc ? `<p class="text-xs text-gray-500 italic mt-1 leading-tight">${f.desc}</p>` : ''}
+                if (showSalgadas) {
+                    html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Salgadas</h4><div class="space-y-2">`;
+                    FLAVORS.salgadas.forEach((f, idx) => {
+                        const isUnavailable = state.settings.unavailable_flavors.includes(f.name);
+                        html += `
+                            <div class="p-3 border rounded ${isUnavailable ? 'bg-gray-100 opacity-50' : 'hover:bg-gray-50 cursor-pointer'}" 
+                                 ${!isUnavailable ? `onclick="togglePizzaFlavor(${idx}, 'salgadas')"` : ''}>
+                                <div class="flex items-start">
+                                    <input type="checkbox" id="chk_salgadas_${idx}" class="w-5 h-5 text-red-600 mt-1 mr-3 pointer-events-none" ${isUnavailable ? 'disabled' : ''}>
+                                    <div>
+                                        <span class="font-bold text-gray-800 block">${f.name} ${isUnavailable ? '<span class="text-xs text-red-600">(Esgotado)</span>' : ''}</span>
+                                        ${f.desc ? `<p class="text-xs text-gray-500 italic mt-1 leading-tight">${f.desc}</p>` : ''}
+                                    </div>
                                 </div>
-                            </div>
-                        </div>`;
-                });
-                html += `</div>`;
+                            </div>`;
+                    });
+                    html += `</div>`;
+                }
                 
-                // Lista Doces
-                html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Doces</h4><div class="space-y-2">`;
-                FLAVORS.doces.forEach((f, idx) => {
-                    const isUnavailable = state.settings.unavailable_flavors.includes(f.name);
-                    html += `
-                        <div class="p-3 border rounded ${isUnavailable ? 'bg-gray-100 opacity-50' : 'hover:bg-gray-50 cursor-pointer'}" 
-                             ${!isUnavailable ? `onclick="togglePizzaFlavor(${idx}, 'doces')"` : ''}>
-                            <div class="flex items-start">
-                                <input type="checkbox" id="chk_doces_${idx}" class="w-5 h-5 text-red-600 mt-1 mr-3 pointer-events-none" ${isUnavailable ? 'disabled' : ''}>
-                                <div>
-                                    <span class="font-bold text-gray-800 block">${f.name} ${isUnavailable ? '<span class="text-xs text-red-600">(Esgotado)</span>' : ''}</span>
-                                    ${f.desc ? `<p class="text-xs text-gray-500 italic mt-1 leading-tight">${f.desc}</p>` : ''}
+                if (showDoces) {
+                    html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Doces</h4><div class="space-y-2">`;
+                    FLAVORS.doces.forEach((f, idx) => {
+                        const isUnavailable = state.settings.unavailable_flavors.includes(f.name);
+                        html += `
+                            <div class="p-3 border rounded ${isUnavailable ? 'bg-gray-100 opacity-50' : 'hover:bg-gray-50 cursor-pointer'}" 
+                                 ${!isUnavailable ? `onclick="togglePizzaFlavor(${idx}, 'doces')"` : ''}>
+                                <div class="flex items-start">
+                                    <input type="checkbox" id="chk_doces_${idx}" class="w-5 h-5 text-red-600 mt-1 mr-3 pointer-events-none" ${isUnavailable ? 'disabled' : ''}>
+                                    <div>
+                                        <span class="font-bold text-gray-800 block">${f.name} ${isUnavailable ? '<span class="text-xs text-red-600">(Esgotado)</span>' : ''}</span>
+                                        ${f.desc ? `<p class="text-xs text-gray-500 italic mt-1 leading-tight">${f.desc}</p>` : ''}
+                                    </div>
                                 </div>
-                            </div>
-                        </div>`;
-                });
-                html += `</div>`;
+                            </div>`;
+                    });
+                    html += `</div>`;
+                }
                 
                 body.innerHTML = html;
                 renderModalFooterPizza();
@@ -305,7 +315,7 @@
                     showToast(`Máximo de ${modalMax} sabores permitidos!`);
                 }
             }
-            // Atualizar UI
+            
             FLAVORS.salgadas.forEach((f, i) => {
                 const chk = document.getElementById(`chk_salgadas_${i}`);
                 if(chk) chk.checked = modalSelections.includes(f.name);
@@ -553,7 +563,6 @@
             } catch(err) { alert("Erro de conexão."); }
         }
 
-        // --- PAINEL ADMIN E AUTO-REFRESH ---
         function promptAdmin() {
             const pwd = prompt("Senha:");
             if(pwd === "andirbys2026") {
@@ -571,22 +580,20 @@
                 if(res.status === 401) { navigate('menu'); return; }
                 state.adminOrders = await res.json();
                 
-                // Grava o último ID ao entrar para não apitar pedidos velhos
                 if(state.adminOrders.length > 0) {
                     lastKnownOrderId = state.adminOrders[0].id;
                 }
 
                 app.innerHTML = renderAdminOrders();
-                startAdminPolling(); // Inicia o loop de atualização automática!
+                startAdminPolling(); 
             } catch(e) { navigate('menu'); }
         }
 
-        // Função de Polling (Auto-Refresh com Áudio)
         function startAdminPolling() {
             if(orderPollingInterval) clearInterval(orderPollingInterval);
             
             orderPollingInterval = setInterval(async () => {
-                if(state.view !== 'admin_orders') return; // só atua se estiver na aba de pedidos
+                if(state.view !== 'admin_orders') return; 
                 
                 try {
                     const res = await fetch('/api/admin/orders', { headers: authHeaders() });
@@ -596,7 +603,6 @@
                     
                     if(newOrders.length > 0) {
                         const latestId = newOrders[0].id;
-                        // Verifica se existe um ID maior do que o que conhecemos
                         if(lastKnownOrderId > 0 && latestId > lastKnownOrderId) {
                             bellSound.play().catch(e => console.log("Áudio bloqueado pelo navegador"));
                             showToast("🔔 NOVO PEDIDO RECEBIDO!");
@@ -604,14 +610,12 @@
                         lastKnownOrderId = latestId;
                     }
                     
-                    // Compara se o conteúdo da lista mudou. Se sim, atualiza a tela de forma silenciosa.
-                    // Isso evita que a tela pisque ou feche as caixas de seleção que você estiver mexendo.
                     if(JSON.stringify(state.adminOrders) !== JSON.stringify(newOrders)) {
                         state.adminOrders = newOrders;
                         document.getElementById('app').innerHTML = renderAdminOrders();
                     }
                 } catch(e) {}
-            }, 45000); // 45000 ms = Checa a cada 45 segundos
+            }, 45000); 
         }
 
         function renderAdminNav() {
@@ -664,7 +668,6 @@
             if(confirm("Apagar pedido?")) { await fetch(`/api/admin/orders/${id}`, { method: 'DELETE', headers: authHeaders() }); loadAdminOrders(); }
         }
 
-        // Impressão Perfeita: Injeta os dados no #print-area e aciona nativamente
         function printOrder(id) {
             const order = state.adminOrders.find(o => o.id === id);
             const items = JSON.parse(order.items_json);
@@ -738,7 +741,6 @@
         }
 
         async function saveSettings() {
-            // Pegar sabores marcados como indisponíveis
             const unavailable = [];
             document.querySelectorAll('.flavor-unavailable-chk:checked').forEach(chk => unavailable.push(chk.value));
 
@@ -751,7 +753,7 @@
             
             await fetch('/api/admin/settings', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
             showToast("Configurações salvas!"); 
-            fetchMenuData(); // recarrega p/ aplicar is_open/flavors
+            fetchMenuData();
         }
 
         async function updateItem(id) {
