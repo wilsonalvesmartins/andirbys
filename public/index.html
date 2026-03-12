@@ -39,8 +39,7 @@
     <footer class="bg-gray-900 text-gray-400 py-6 text-center mt-auto border-t-4 border-andirby-red" id="main-footer">
         <p class="text-sm text-andirby-yellow font-bold">Andirby's Pizzaria & Esfiharia</p>
         <p class="text-xs mt-1">&copy; 2026. Todos os direitos reservados.</p>
-        <!-- A função onClick agora desbloqueia o áudio antes de pedir a senha -->
-        <span onclick="unlockAudioAndPromptAdmin()" class="inline-block mt-2 cursor-pointer opacity-10 hover:opacity-100 transition-opacity" title="Área Restrita">🔒</span>
+        <span onclick="promptAdmin()" class="inline-block mt-2 cursor-pointer opacity-10 hover:opacity-100 transition-opacity" title="Área Restrita">🔒</span>
     </footer>
 
     <!-- Área exclusiva para Impressão -->
@@ -93,10 +92,51 @@
             modalItem: null
         };
 
-        // Arquivo .mp3 universal para garantia de compatibilidade com Apple e Android
-        const bellSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        // --- SISTEMA DE ÁUDIO NATIVO E POLLING ---
+        let audioCtx = null;
         let orderPollingInterval = null;
-        let lastKnownOrderId = -1; // -1 significa que ainda não inicializamos
+        let lastKnownOrderId = -1;
+
+        // Inicializa o motor de som interno (chamado ao fazer login para liberar o bloqueio do navegador)
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Sintetiza um som de Ding-Dong sem precisar de arquivos externos!
+        function playDingDong() {
+            try {
+                initAudio();
+                
+                // Ding (Nota mais aguda)
+                const osc1 = audioCtx.createOscillator();
+                const gain1 = audioCtx.createGain();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(880, audioCtx.currentTime); // Frequência
+                gain1.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gain1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc1.connect(gain1);
+                gain1.connect(audioCtx.destination);
+                osc1.start(audioCtx.currentTime);
+                osc1.stop(audioCtx.currentTime + 0.3);
+
+                // Dong (Nota mais grave logo em seguida)
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.3);
+                gain2.gain.setValueAtTime(0.5, audioCtx.currentTime + 0.3);
+                gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.start(audioCtx.currentTime + 0.3);
+                osc2.stop(audioCtx.currentTime + 0.8);
+            } catch(e) { console.error("Erro no áudio:", e); }
+        }
 
         async function init() {
             await fetchMenuData();
@@ -561,22 +601,12 @@
             } catch(err) { alert("Erro de conexão."); }
         }
 
-        // Função responsável por destravar a segurança de som do navegador ao clicar no cadeado
-        function unlockAudioAndPromptAdmin() {
-            bellSound.play().then(() => {
-                bellSound.pause();
-                bellSound.currentTime = 0;
-            }).catch(() => {});
-            
-            // Dá um tempo minúsculo para a permissão ser processada antes de abrir o popup de senha
-            setTimeout(promptAdmin, 100);
-        }
-
         function promptAdmin() {
             const pwd = prompt("Senha:");
             if(pwd === "andirbys2026") {
                 state.adminToken = "Bearer andirbys2026";
                 localStorage.setItem('adminToken', state.adminToken);
+                initAudio(); // Inicializa o motor de som interno
                 navigate('admin_orders');
             } else if(pwd) alert("Incorreta!");
         }
@@ -592,7 +622,6 @@
                 if(state.adminOrders.length > 0) {
                     lastKnownOrderId = state.adminOrders[0].id;
                 } else {
-                    // Previne o bug de não tocar se o banco estiver vazio no primeiro pedido
                     lastKnownOrderId = 0;
                 }
 
@@ -604,39 +633,48 @@
         function startAdminPolling() {
             if(orderPollingInterval) clearInterval(orderPollingInterval);
             
+            // Polling alterado para 30 segundos!
             orderPollingInterval = setInterval(async () => {
                 if(state.view !== 'admin_orders') return; 
                 
                 try {
+                    // Efeito visual amarelo para mostrar que está checando na internet
+                    const liveIndicator = document.getElementById('live-indicator');
+                    if(liveIndicator) liveIndicator.classList.replace('text-green-500', 'text-yellow-500');
+
                     const res = await fetch('/api/admin/orders', { headers: authHeaders() });
                     if(!res.ok) return;
                     
                     const newOrders = await res.json();
                     
+                    if(liveIndicator) setTimeout(() => liveIndicator.classList.replace('text-yellow-500', 'text-green-500'), 500);
+
                     if(newOrders.length > 0) {
                         const latestId = newOrders[0].id;
                         if(lastKnownOrderId !== -1 && latestId > lastKnownOrderId) {
-                            // Volta a campainha pro zero e dá Play
-                            bellSound.currentTime = 0;
-                            bellSound.play().catch(e => console.log("Áudio bloqueado pelo navegador"));
+                            playDingDong();
                             showToast("🔔 NOVO PEDIDO RECEBIDO!");
                         }
                         lastKnownOrderId = latestId;
                     }
                     
+                    // Somente redesenha a tela se houver mudança real de dados (evita piscar à toa)
                     if(JSON.stringify(state.adminOrders) !== JSON.stringify(newOrders)) {
                         state.adminOrders = newOrders;
                         document.getElementById('app').innerHTML = renderAdminOrders();
                     }
                 } catch(e) {}
-            }, 45000); 
+            }, 30000); 
         }
 
         function renderAdminNav() {
             return `
-                <div class="flex gap-4 mb-6 border-b pb-4">
-                    <button onclick="navigate('admin_orders')" class="${state.view==='admin_orders'?'font-black text-andirby-red border-b-4 border-andirby-red':'text-gray-500 font-bold'} pb-1">Pedidos <span class="text-xs text-green-500 ml-1 animate-pulse" title="Atualização ao vivo ativada">● Live</span></button>
+                <div class="flex flex-wrap gap-4 mb-6 border-b pb-4 items-center">
+                    <button onclick="navigate('admin_orders')" class="${state.view==='admin_orders'?'font-black text-andirby-red border-b-4 border-andirby-red':'text-gray-500 font-bold'} pb-1 flex items-center gap-1">
+                        Pedidos <span id="live-indicator" class="text-xs text-green-500 animate-pulse ml-1" title="Atualização ao vivo ativada">● Live</span>
+                    </button>
                     <button onclick="navigate('admin_menu')" class="${state.view==='admin_menu'?'font-black text-andirby-red border-b-4 border-andirby-red':'text-gray-500 font-bold'} pb-1">Configurações</button>
+                    <button onclick="loadAdminOrders()" class="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded font-bold hover:bg-blue-200 transition">↻ Atualizar Agora</button>
                     <button onclick="navigate('menu')" class="ml-auto text-sm bg-gray-800 text-white px-3 py-1 rounded font-bold">Sair do Painel</button>
                 </div>`;
         }
@@ -675,9 +713,11 @@
 
         async function updateOrderStatus(id, status) {
             const order = state.adminOrders.find(o => o.id === id);
+            order.status = status; // Mantém o estado local para a tela não piscar desnecessariamente no próximo polling
             await fetch(`/api/admin/orders/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status, customer_name: order.customer_name, customer_address: order.customer_address }) });
             showToast("Status e Webhook enviados!");
         }
+
         async function deleteOrder(id) {
             if(confirm("Apagar pedido?")) { await fetch(`/api/admin/orders/${id}`, { method: 'DELETE', headers: authHeaders() }); loadAdminOrders(); }
         }
