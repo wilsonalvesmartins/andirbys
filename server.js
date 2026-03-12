@@ -8,8 +8,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Serve os ficheiros estáticos (o front-end)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Garantir que a pasta de dados existe para proteger a base de dados
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir);
@@ -18,10 +20,12 @@ if (!fs.existsSync(dataDir)) {
 const dbPath = path.join(dataDir, 'database.sqlite');
 const db = new sqlite3.Database(dbPath);
 
+// Wrappers para usar Promises no SQLite e facilitar o código
 const run = (sql, params = []) => new Promise((resolve, reject) => db.run(sql, params, function(err) { if (err) reject(err); else resolve(this); }));
 const all = (sql, params = []) => new Promise((resolve, reject) => db.all(sql, params, (err, rows) => { if (err) reject(err); else resolve(rows); }));
 const get = (sql, params = []) => new Promise((resolve, reject) => db.get(sql, params, (err, row) => { if (err) reject(err); else resolve(row); }));
 
+// Inicialização da Base de Dados
 async function initDB() {
     await run(`CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,7 +68,7 @@ async function initDB() {
         await run(`INSERT INTO settings (key, value) VALUES ('is_open', '1')`); // 1 Aberto, 0 Fechado
         await run(`INSERT INTO settings (key, value) VALUES ('unavailable_flavors', '[]')`); // Sabores esgotados
     } else {
-        // Atualizações para bancos antigos que não têm os novos campos
+        // Atualizações para bases antigas que não têm os novos campos
         const hasIsOpen = await get(`SELECT value FROM settings WHERE key = 'is_open'`);
         if(!hasIsOpen) await run(`INSERT INTO settings (key, value) VALUES ('is_open', '1')`);
         
@@ -72,7 +76,7 @@ async function initDB() {
         if(!hasUnav) await run(`INSERT INTO settings (key, value) VALUES ('unavailable_flavors', '[]')`);
     }
 
-    // Inserir cardápio do PDF se vazio
+    // Inserir cardápio do PDF se estiver vazio
     const hasItems = await get(`SELECT * FROM items LIMIT 1`);
     if (!hasItems) {
         const initialItems = [
@@ -103,6 +107,7 @@ async function initDB() {
 }
 initDB();
 
+// Middleware de Autenticação
 function authAdmin(req, res, next) {
     const authHeader = req.headers.authorization;
     if (authHeader === 'Bearer andirbys2026') {
@@ -112,7 +117,7 @@ function authAdmin(req, res, next) {
     }
 }
 
-// Função para enviar Webhook sem travar a requisição
+// Função para enviar Webhook sem travar a requisição (n8n)
 async function triggerWebhook(payload) {
     try {
         const webhookSetting = await get(`SELECT value FROM settings WHERE key = 'webhook_url'`);
@@ -127,6 +132,8 @@ async function triggerWebhook(payload) {
 }
 
 // ================= ROTAS PÚBLICAS =================
+
+// Obter cardápio e configurações
 app.get('/api/menu', async (req, res) => {
     try {
         const items = await all(`SELECT * FROM items WHERE active = 1 ORDER BY category, id`);
@@ -137,6 +144,7 @@ app.get('/api/menu', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Preenchimento automático do cliente
 app.get('/api/users/:whatsapp', async (req, res) => {
     try {
         const user = await get(`SELECT * FROM users WHERE whatsapp = ?`, [req.params.whatsapp]);
@@ -144,24 +152,36 @@ app.get('/api/users/:whatsapp', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// [NOVO] Histórico de Pedidos do Cliente ("Meus Pedidos")
+app.get('/api/client/orders/:whatsapp', async (req, res) => {
+    try {
+        const orders = await all(`SELECT * FROM orders WHERE customer_whatsapp = ? ORDER BY created_at DESC`, [req.params.whatsapp]);
+        res.json(orders);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Criar novo pedido
 app.post('/api/orders', async (req, res) => {
     const { whatsapp, name, address, type, items, subtotal, delivery_fee, total } = req.body;
     try {
-        // Verifica se restaurante está aberto
+        // Verifica se o restaurante está aberto
         const isOpenSetting = await get(`SELECT value FROM settings WHERE key = 'is_open'`);
         if(isOpenSetting && isOpenSetting.value === '0') {
             return res.status(400).json({ error: 'Restaurante fechado no momento.' });
         }
 
+        // Salva/Atualiza o utilizador
         await run(`INSERT INTO users (whatsapp, name, address) VALUES (?, ?, ?) 
                    ON CONFLICT(whatsapp) DO UPDATE SET name = excluded.name, address = excluded.address`, 
                    [whatsapp, name, address]);
         
+        // Salva o pedido
         const itemsJson = JSON.stringify(items);
         const result = await run(`INSERT INTO orders (customer_whatsapp, customer_name, customer_address, type, items_json, subtotal, delivery_fee, total, status) 
                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pendente')`,
                                   [whatsapp, name, address, type, itemsJson, subtotal, delivery_fee, total]);
         
+        // Dispara o webhook
         triggerWebhook({
             event: 'new_order',
             orderId: result.lastID, whatsapp, name, address, type, items, subtotal, delivery_fee, total, status: 'Pendente',
@@ -172,7 +192,9 @@ app.post('/api/orders', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ================= ROTAS ADMIN =================
+// ================= ROTAS DE ADMINISTRAÇÃO =================
+
+// Listar pedidos
 app.get('/api/admin/orders', authAdmin, async (req, res) => {
     try {
         const orders = await all(`SELECT * FROM orders ORDER BY created_at DESC`);
@@ -180,13 +202,14 @@ app.get('/api/admin/orders', authAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Atualizar estado do pedido
 app.put('/api/admin/orders/:id', authAdmin, async (req, res) => {
     const { status, customer_name, customer_address } = req.body;
     try {
         await run(`UPDATE orders SET status = ?, customer_name = ?, customer_address = ? WHERE id = ?`, 
             [status, customer_name, customer_address, req.params.id]);
         
-        // Dispara o webhook informando mudança de status!
+        // Dispara o webhook a informar a mudança de estado
         const updatedOrder = await get(`SELECT * FROM orders WHERE id = ?`, [req.params.id]);
         if(updatedOrder) {
             triggerWebhook({
@@ -203,6 +226,7 @@ app.put('/api/admin/orders/:id', authAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Apagar pedido
 app.delete('/api/admin/orders/:id', authAdmin, async (req, res) => {
     try {
         await run(`DELETE FROM orders WHERE id = ?`, [req.params.id]);
@@ -210,6 +234,7 @@ app.delete('/api/admin/orders/:id', authAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Criar item no cardápio
 app.post('/api/admin/items', authAdmin, async (req, res) => {
     const { category, name, price } = req.body;
     try {
@@ -218,6 +243,7 @@ app.post('/api/admin/items', authAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Editar item no cardápio
 app.put('/api/admin/items/:id', authAdmin, async (req, res) => {
     const { category, name, price, active } = req.body;
     try {
@@ -227,6 +253,7 @@ app.put('/api/admin/items/:id', authAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Atualizar configurações globais
 app.put('/api/admin/settings', authAdmin, async (req, res) => {
     const { delivery_fee, webhook_url, is_open, unavailable_flavors } = req.body;
     try {
@@ -238,7 +265,8 @@ app.put('/api/admin/settings', authAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// A porta da sua VPS configurada no Docker
 const PORT = 3002;
 app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`Servidor a correr na porta ${PORT}`);
 });
