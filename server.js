@@ -31,13 +31,13 @@ async function initDB() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         category TEXT,
         name TEXT,
+        description TEXT DEFAULT '',
         price REAL,
         active INTEGER DEFAULT 1
     )`);
 
-    // Atualização de Migração: Garante que a coluna description existe para adicionar Porções e afins
-    const tableInfo = await all(`PRAGMA table_info(items)`);
-    if (!tableInfo.some(col => col.name === 'description')) {
+    const tableInfoItems = await all(`PRAGMA table_info(items)`);
+    if (!tableInfoItems.some(col => col.name === 'description')) {
         await run(`ALTER TABLE items ADD COLUMN description TEXT DEFAULT ''`);
     }
 
@@ -58,6 +58,7 @@ async function initDB() {
         customer_name TEXT,
         customer_address TEXT,
         type TEXT,
+        payment_method TEXT DEFAULT '',
         items_json TEXT,
         subtotal REAL,
         delivery_fee REAL,
@@ -66,6 +67,12 @@ async function initDB() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // Atualização de Migração: Garante que a coluna payment_method existe para pedidos antigos
+    const tableOrdersInfo = await all(`PRAGMA table_info(orders)`);
+    if (!tableOrdersInfo.some(col => col.name === 'payment_method')) {
+        await run(`ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT ''`);
+    }
+
     // Inserir configurações padrão caso não existam
     const hasSettings = await get(`SELECT * FROM settings LIMIT 1`);
     if (!hasSettings) {
@@ -73,16 +80,11 @@ async function initDB() {
         await run(`INSERT INTO settings (key, value) VALUES ('webhook_url', '')`);
         await run(`INSERT INTO settings (key, value) VALUES ('is_open', '1')`);
         await run(`INSERT INTO settings (key, value) VALUES ('unavailable_flavors', '[]')`);
-        await run(`INSERT INTO settings (key, value) VALUES ('logo_url', '')`);
     } else {
         const hasIsOpen = await get(`SELECT value FROM settings WHERE key = 'is_open'`);
         if(!hasIsOpen) await run(`INSERT INTO settings (key, value) VALUES ('is_open', '1')`);
-        
         const hasUnav = await get(`SELECT value FROM settings WHERE key = 'unavailable_flavors'`);
         if(!hasUnav) await run(`INSERT INTO settings (key, value) VALUES ('unavailable_flavors', '[]')`);
-
-        const hasLogo = await get(`SELECT value FROM settings WHERE key = 'logo_url'`);
-        if(!hasLogo) await run(`INSERT INTO settings (key, value) VALUES ('logo_url', '')`);
     }
 
     // Inserir cardápio do PDF se estiver vazio
@@ -162,7 +164,7 @@ app.get('/api/client/orders/:whatsapp', async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
-    const { whatsapp, name, address, type, items, subtotal, delivery_fee, total } = req.body;
+    const { whatsapp, name, address, type, paymentMethod, items, subtotal, delivery_fee, total } = req.body;
     try {
         const isOpenSetting = await get(`SELECT value FROM settings WHERE key = 'is_open'`);
         if(isOpenSetting && isOpenSetting.value === '0') {
@@ -174,13 +176,23 @@ app.post('/api/orders', async (req, res) => {
                    [whatsapp, name, address]);
         
         const itemsJson = JSON.stringify(items);
-        const result = await run(`INSERT INTO orders (customer_whatsapp, customer_name, customer_address, type, items_json, subtotal, delivery_fee, total, status) 
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pendente')`,
-                                  [whatsapp, name, address, type, itemsJson, subtotal, delivery_fee, total]);
+        const result = await run(`INSERT INTO orders (customer_whatsapp, customer_name, customer_address, type, payment_method, items_json, subtotal, delivery_fee, total, status) 
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendente')`,
+                                  [whatsapp, name, address, type, paymentMethod || '', itemsJson, subtotal, delivery_fee, total]);
         
         triggerWebhook({
             event: 'new_order',
-            orderId: result.lastID, whatsapp, name, address, type, items, subtotal, delivery_fee, total, status: 'Pendente',
+            orderId: result.lastID, 
+            whatsapp, 
+            name, 
+            address, 
+            type, 
+            paymentMethod: paymentMethod || '', 
+            items, 
+            subtotal, 
+            delivery_fee, 
+            total, 
+            status: 'Pendente',
             date: new Date().toISOString()
         });
 
@@ -205,8 +217,19 @@ app.put('/api/admin/orders/:id', authAdmin, async (req, res) => {
         const updatedOrder = await get(`SELECT * FROM orders WHERE id = ?`, [req.params.id]);
         if(updatedOrder) {
             triggerWebhook({
-                event: 'status_update', orderId: updatedOrder.id, whatsapp: updatedOrder.customer_whatsapp,
-                name: updatedOrder.customer_name, status: updatedOrder.status, type: updatedOrder.type, total: updatedOrder.total
+                event: 'status_update', 
+                orderId: updatedOrder.id, 
+                whatsapp: updatedOrder.customer_whatsapp,
+                name: updatedOrder.customer_name, 
+                address: updatedOrder.customer_address,
+                type: updatedOrder.type, 
+                paymentMethod: updatedOrder.payment_method,
+                items: JSON.parse(updatedOrder.items_json),
+                subtotal: updatedOrder.subtotal,
+                delivery_fee: updatedOrder.delivery_fee,
+                total: updatedOrder.total,
+                status: updatedOrder.status,
+                date: updatedOrder.created_at
             });
         }
         res.json({ success: true });
@@ -238,13 +261,12 @@ app.put('/api/admin/items/:id', authAdmin, async (req, res) => {
 });
 
 app.put('/api/admin/settings', authAdmin, async (req, res) => {
-    const { delivery_fee, webhook_url, is_open, unavailable_flavors, logo_url } = req.body;
+    const { delivery_fee, webhook_url, is_open, unavailable_flavors } = req.body;
     try {
         await run(`UPDATE settings SET value = ? WHERE key = 'delivery_fee'`, [delivery_fee]);
         await run(`INSERT INTO settings (key, value) VALUES ('webhook_url', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [webhook_url]);
         await run(`INSERT INTO settings (key, value) VALUES ('is_open', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [is_open]);
         await run(`INSERT INTO settings (key, value) VALUES ('unavailable_flavors', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [JSON.stringify(unavailable_flavors)]);
-        await run(`INSERT INTO settings (key, value) VALUES ('logo_url', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [logo_url]);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
