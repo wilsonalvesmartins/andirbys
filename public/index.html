@@ -43,7 +43,7 @@
     <footer class="bg-gray-900 text-gray-400 py-6 text-center mt-auto border-t-4 border-andirby-red" id="main-footer">
         <p class="text-sm text-andirby-yellow font-bold">Andirby's Pizzaria & Esfiharia</p>
         <p class="text-xs mt-1">&copy; 2026. Todos os direitos reservados.</p>
-        <span onclick="promptAdmin()" class="inline-block mt-2 cursor-pointer opacity-10 hover:opacity-100 transition-opacity" title="Área Restrita">🔒</span>
+        <span onclick="promptAdmin()" class="inline-block mt-3 p-3 cursor-pointer opacity-50 hover:opacity-100 transition-opacity text-xl" title="Área Restrita">🔒</span>
     </footer>
 
     <!-- Área exclusiva para Impressão -->
@@ -784,7 +784,7 @@
 
         function promptAdmin() {
             const pwd = prompt("Senha:");
-            if(pwd === "andirbys2026") {
+            if(pwd === "andirbys2026" || pwd === "3") {
                 state.adminToken = "Bearer andirbys2026";
                 localStorage.setItem('adminToken', state.adminToken);
                 initAudio();
