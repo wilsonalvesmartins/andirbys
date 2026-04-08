@@ -187,8 +187,8 @@
                         `<p class="text-gray-500 font-bold">Faça seu pedido conosco!</p>`}
                 </div>`;
             
-            const categories = [...new Set(state.items.filter(i => i.category !== 'Bordas Recheadas' && i.category !== 'Pizza no Prato').map(i => i.category))];
-            const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Esfihas', 'Porções', 'Outros', 'Bebidas'];
+            const categories = [...new Set(state.items.filter(i => i.category !== 'Bordas Recheadas').map(i => i.category))];
+            const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Pizza no Prato', 'Esfihas', 'Porções', 'Outros', 'Bebidas'];
             categories.sort((a, b) => {
                 let idxA = catOrder.findIndex(c => a.includes(c)); let idxB = catOrder.findIndex(c => b.includes(c));
                 if(idxA === -1) idxA = 99; if(idxB === -1) idxB = 99;
@@ -201,7 +201,7 @@
                 
                 const catItems = state.items.filter(i => i.category === cat);
                 catItems.forEach(item => {
-                    const isConfigurable = item.category.includes('Pizzas') || item.category.includes('Esfihas');
+                    const isConfigurable = item.category.toLowerCase().includes('pizza') || item.category.includes('Esfihas');
                     html += `
                         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex justify-between items-center hover:shadow-md transition cursor-pointer" onclick="${isConfigurable ? `openConfigModal(${item.id})` : `addSimpleItem(${item.id})`}">
                             <div class="flex-1 pr-4">
@@ -260,7 +260,7 @@
             
             const body = document.getElementById('modal-body');
             
-            if (item.category.includes('Pizzas')) {
+            if (item.category.toLowerCase().includes('pizza')) {
                 // --- LÓGICA INTELIGENTE DE MÁXIMO DE SABORES ---
                 modalMax = 1;
                 const nameLower = item.name.toLowerCase();
@@ -278,7 +278,14 @@
                 if (nameLower.includes('salgada') && !nameLower.includes('doce')) showDoces = false;
                 else if (nameLower.includes('doce') && !nameLower.includes('salgada')) showSalgadas = false;
                 
-                let html = `<p class="mb-4 text-sm bg-yellow-100 p-2 rounded text-yellow-800 font-bold">Escolha até ${modalMax} sabor(es):</p>`;
+                let subtitleExtra = "";
+                if (nameLower.includes('2 salgad') && nameLower.includes('1 doce')) {
+                    subtitleExtra = "<br><span class='text-xs text-red-600'>(Obrigatório: 2 Salgadas e 1 Doce)</span>";
+                } else if (nameLower.includes('salgada e doce') && modalMax === 2) {
+                    subtitleExtra = "<br><span class='text-xs text-red-600'>(Obrigatório: 1 Salgada e 1 Doce)</span>";
+                }
+
+                let html = `<p class="mb-4 text-sm bg-yellow-100 p-2 rounded text-yellow-800 font-bold">Escolha até ${modalMax} sabor(es):${subtitleExtra}</p>`;
                 
                 if (showSalgadas) {
                     html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Salgadas</h4><div class="space-y-2">`;
@@ -395,20 +402,69 @@
             const flavorName = flavorObj.name;
             const pos = modalSelections.indexOf(flavorName);
             
-            if (pos > -1) { modalSelections.splice(pos, 1); } 
-            else {
-                if (modalSelections.length < modalMax) modalSelections.push(flavorName);
-                else showToast(`Máximo de ${modalMax} sabores permitidos!`);
+            let maxSalgadas = modalMax;
+            let maxDoces = modalMax;
+            const nameLower = state.modalItem.name.toLowerCase();
+
+            // Limites rígidos de distribuição baseados no nome do produto
+            if (nameLower.includes('2 salgad') && nameLower.includes('1 doce')) {
+                maxSalgadas = 2;
+                maxDoces = 1;
+            } else if (nameLower.includes('salgada e doce') && modalMax === 2) {
+                maxSalgadas = 1;
+                maxDoces = 1;
+            }
+
+            if (pos > -1) { 
+                modalSelections.splice(pos, 1); 
+            } else {
+                if (modalSelections.length < modalMax) {
+                    // Contar quantos sabores de cada tipo já estão selecionados
+                    let currentSalgadas = 0;
+                    let currentDoces = 0;
+                    modalSelections.forEach(sel => {
+                        if (FLAVORS.salgadas.some(s => s.name === sel)) currentSalgadas++;
+                        if (FLAVORS.doces.some(d => d.name === sel)) currentDoces++;
+                    });
+
+                    // Bloquear caso tente ultrapassar o limite restrito do sabor específico
+                    if (type === 'salgadas' && currentSalgadas >= maxSalgadas) {
+                        return showToast(`Você só pode escolher ${maxSalgadas} sabor(es) salgado(s) nesta opção!`);
+                    }
+                    if (type === 'doces' && currentDoces >= maxDoces) {
+                        return showToast(`Você só pode escolher ${maxDoces} sabor(es) doce(s) nesta opção!`);
+                    }
+
+                    modalSelections.push(flavorName);
+                } else {
+                    showToast(`Máximo de ${modalMax} sabores permitidos!`);
+                }
             }
             
+            // Atualizar checkboxes visualmente
             FLAVORS.salgadas.forEach((f, i) => { const chk = document.getElementById(`chk_salgadas_${i}`); if(chk) chk.checked = modalSelections.includes(f.name); });
             FLAVORS.doces.forEach((f, i) => { const chk = document.getElementById(`chk_doces_${i}`); if(chk) chk.checked = modalSelections.includes(f.name); });
             renderModalFooterPizza();
         }
 
         function renderModalFooterPizza() {
-            const valid = modalSelections.length > 0 && modalSelections.length <= modalMax;
+            let valid = modalSelections.length > 0 && modalSelections.length <= modalMax;
             
+            const nameLower = state.modalItem.name.toLowerCase();
+            let currentSalgadas = 0;
+            let currentDoces = 0;
+            modalSelections.forEach(sel => {
+                if (FLAVORS.salgadas.some(s => s.name === sel)) currentSalgadas++;
+                if (FLAVORS.doces.some(d => d.name === sel)) currentDoces++;
+            });
+
+            // Validação estrita para ativar o botão apenas se os números baterem exatos
+            if (nameLower.includes('2 salgad') && nameLower.includes('1 doce')) {
+                valid = (currentSalgadas === 2 && currentDoces === 1);
+            } else if (nameLower.includes('salgada e doce') && modalMax === 2) {
+                valid = (currentSalgadas === 1 && currentDoces === 1);
+            }
+
             let extraPrice = 0;
             const bordaSelect = document.getElementById('select_borda');
             if (bordaSelect && bordaSelect.value !== "0") {
@@ -455,7 +511,7 @@
             let details = "";
             let finalPrice = state.modalItem.price;
 
-            if (state.modalItem.category.includes('Pizzas')) {
+            if (state.modalItem.category.toLowerCase().includes('pizza')) {
                 details = modalSelections.join(' + ');
                 const bordaSelect = document.getElementById('select_borda');
                 if (bordaSelect && bordaSelect.value !== "0") {
@@ -638,9 +694,9 @@
 
                         <!-- Box PIX Automático -->
                         <div id="pix_container" class="mt-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-                            <p class="text-sm font-bold text-green-800 mb-1">Chave PIX (CPF):</p>
+                            <p class="text-sm font-bold text-green-800 mb-1">Chave PIX (Telefone):</p>
                             <div class="flex gap-2 mb-2">
-                                <input type="text" readonly value="17168517856" id="pix_key" class="w-full border-2 border-green-300 rounded p-2 text-sm font-bold bg-white text-gray-700">
+                                <input type="text" readonly value="16991404962" id="pix_key" class="w-full border-2 border-green-300 rounded p-2 text-sm font-bold bg-white text-gray-700">
                                 <button type="button" onclick="copyPix()" class="bg-green-600 text-white px-4 rounded font-bold hover:bg-green-700 transition">Copiar</button>
                             </div>
                             <p class="text-xs text-green-700 font-bold">Titular: Angela Maria Lopes</p>
@@ -922,6 +978,17 @@
         function printOrder(id) {
             const order = state.adminOrders.find(o => o.id === id);
             const items = JSON.parse(order.items_json);
+            
+            // Lógica para somar o Total de Esfihas no pedido
+            let totalEsfihas = 0;
+            items.forEach(i => {
+                if (i.name.toLowerCase().includes('esfiha')) {
+                    if (i.name.includes('20')) totalEsfihas += 20;
+                    else if (i.name.includes('10')) totalEsfihas += 10;
+                    else totalEsfihas += 1;
+                }
+            });
+
             let printHtml = `
                 <div style="text-align:center;margin-bottom:10px;font-weight:bold;">ANDIRBY'S PIZZARIA<br>Pedido #${order.id}<br>${formatDate(order.created_at)}</div>
                 <div style="border-top:1px dashed black;border-bottom:1px dashed black;padding:5px 0;margin-bottom:10px;">
@@ -935,6 +1002,11 @@
                     ${items.map(i => `<tr><td style="padding-bottom:5px;"><b>${i.name}</b><br><small style="white-space: pre-line;">${i.details||''}</small></td><td style="text-align:right;vertical-align:top;">${formatMoney(i.price)}</td></tr>`).join('')}
                 </table>
                 <div style="border-top:1px dashed black;padding-top:5px;text-align:right;">Subtotal: ${formatMoney(order.subtotal)}<br>${order.type==='Entrega'?`Taxa: ${formatMoney(order.delivery_fee)}<br>`:''}<strong>TOTAL: ${formatMoney(order.total)}</strong></div>
+                ${totalEsfihas > 0 ? `
+                <div style="border-top:1px dashed black;padding-top:5px;margin-top:5px;text-align:center;font-size:12px;font-weight:bold;">
+                    TOTAL DE ESFIHAS: ${totalEsfihas} UN.
+                </div>
+                ` : ''}
                 <div style="text-align:center;margin-top:15px;font-size:11px;">Obrigado pela preferência!</div>
             `;
             document.getElementById('print-area').innerHTML = printHtml; 
@@ -1015,34 +1087,45 @@
                     <button onclick="saveSettings()" class="mt-6 bg-andirby-red text-white px-4 py-3 rounded font-black hover:bg-andirby-red w-full shadow-md">Salvar Configurações</button>
                 </div>
                 
-                <h3 class="font-black text-xl mb-4 border-b pb-2">Lista de Produtos Cadastrados</h3>
-                <div class="space-y-3">
+                <h3 class="font-black text-xl mb-4 border-b pb-2 mt-8">Lista de Produtos Cadastrados</h3>
             `;
 
-            state.items.forEach(item => {
+            // Agrupamento Visual de Categorias no Painel Admin
+            const adminCategories = [...new Set(state.items.map(i => i.category))];
+            
+            adminCategories.forEach(cat => {
                 html += `
-                    <div class="bg-white p-3 rounded-lg shadow-sm border flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-                        <input type="text" id="edit_cat_${item.id}" value="${item.category}" class="border-2 p-2 rounded font-bold w-full sm:w-40 text-sm focus:border-andirby-red outline-none" title="Categoria">
-                        
-                        <div class="flex-grow w-full flex flex-col gap-1">
-                            <input type="text" id="edit_name_${item.id}" value="${item.name}" class="border-2 p-2 rounded font-bold w-full text-sm focus:border-andirby-red outline-none" title="Nome">
-                            <input type="text" id="edit_desc_${item.id}" value="${item.description || ''}" placeholder="Descrição (Opcional)" class="border-2 p-1 rounded text-xs w-full text-gray-600 focus:border-andirby-red outline-none">
-                        </div>
+                    <div class="mb-6">
+                        <h4 class="font-bold text-lg text-andirby-red border-b border-red-200 pb-1 mb-3">${cat}</h4>
+                        <div class="space-y-3">
+                `;
+                
+                state.items.filter(i => i.category === cat).forEach(item => {
+                    html += `
+                        <div class="bg-white p-3 rounded-lg shadow-sm border flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                            <input type="text" id="edit_cat_${item.id}" value="${item.category}" class="border-2 p-2 rounded font-bold w-full sm:w-40 text-sm focus:border-andirby-red outline-none" title="Categoria">
+                            
+                            <div class="flex-grow w-full flex flex-col gap-1">
+                                <input type="text" id="edit_name_${item.id}" value="${item.name}" class="border-2 p-2 rounded font-bold w-full text-sm focus:border-andirby-red outline-none" title="Nome">
+                                <input type="text" id="edit_desc_${item.id}" value="${item.description || ''}" placeholder="Descrição (Opcional)" class="border-2 p-1 rounded text-xs w-full text-gray-600 focus:border-andirby-red outline-none">
+                            </div>
 
-                        <input type="number" id="edit_price_${item.id}" value="${item.price}" step="0.10" class="border-2 p-2 rounded w-full sm:w-24 font-bold text-andirby-red focus:border-andirby-red outline-none">
-                        
-                        <select id="edit_active_${item.id}" class="border-2 p-2 rounded font-bold w-full sm:w-24 text-sm">
-                            <option value="1" ${item.active ? 'selected':''}>Ativo</option>
-                            <option value="0" ${!item.active ? 'selected':''}>Inativo</option>
-                        </select>
+                            <input type="number" id="edit_price_${item.id}" value="${item.price}" step="0.10" class="border-2 p-2 rounded w-full sm:w-24 font-bold text-andirby-red focus:border-andirby-red outline-none">
+                            
+                            <select id="edit_active_${item.id}" class="border-2 p-2 rounded font-bold w-full sm:w-24 text-sm">
+                                <option value="1" ${item.active ? 'selected':''}>Ativo</option>
+                                <option value="0" ${!item.active ? 'selected':''}>Inativo</option>
+                            </select>
 
-                        <div class="flex gap-2 w-full sm:w-auto">
-                            <button onclick="updateItem(${item.id})" class="flex-1 sm:flex-none bg-gray-800 text-white px-4 py-2 rounded font-bold hover:bg-black shadow">Salvar</button>
-                            <button onclick="deleteItem(${item.id})" class="bg-red-600 text-white px-3 py-2 rounded font-bold hover:bg-red-700 shadow" title="Excluir">🗑️</button>
-                        </div>
-                    </div>`;
+                            <div class="flex gap-2 w-full sm:w-auto">
+                                <button onclick="updateItem(${item.id})" class="flex-1 sm:flex-none bg-gray-800 text-white px-4 py-2 rounded font-bold hover:bg-black shadow">Salvar</button>
+                                <button onclick="deleteItem(${item.id})" class="bg-red-600 text-white px-3 py-2 rounded font-bold hover:bg-red-700 shadow" title="Excluir">🗑️</button>
+                            </div>
+                        </div>`;
+                });
+                html += `</div></div>`;
             });
-            return html + `</div>`;
+            return html;
         }
 
         async function addNewItem() {
