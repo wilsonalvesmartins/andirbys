@@ -290,7 +290,7 @@
                 if (showSalgadas) {
                     html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Salgadas</h4><div class="space-y-2">`;
                     FLAVORS.salgadas.forEach((f, idx) => {
-                        const isUnavailable = state.settings.unavailable_flavors.includes(f.name);
+                        const isUnavailable = state.settings.unavailable_flavors.includes(`pizza_${f.name}`) || state.settings.unavailable_flavors.includes(f.name);
                         html += `
                             <div class="p-3 border rounded ${isUnavailable ? 'bg-gray-100 opacity-50' : 'hover:bg-gray-50 cursor-pointer'}" 
                                  ${!isUnavailable ? `onclick="togglePizzaFlavor(${idx}, 'salgadas')"` : ''}>
@@ -308,7 +308,7 @@
                 if (showDoces) {
                     html += `<h4 class="font-bold text-andirby-red border-b mb-2 mt-4">Doces</h4><div class="space-y-2">`;
                     FLAVORS.doces.forEach((f, idx) => {
-                        const isUnavailable = state.settings.unavailable_flavors.includes(f.name);
+                        const isUnavailable = state.settings.unavailable_flavors.includes(`pizza_${f.name}`) || state.settings.unavailable_flavors.includes(f.name);
                         html += `
                             <div class="p-3 border rounded ${isUnavailable ? 'bg-gray-100 opacity-50' : 'hover:bg-gray-50 cursor-pointer'}" 
                                  ${!isUnavailable ? `onclick="togglePizzaFlavor(${idx}, 'doces')"` : ''}>
@@ -370,7 +370,7 @@
                 let html = `<p class="mb-4 text-sm bg-yellow-100 p-2 rounded text-yellow-800 font-bold" id="esfiha-counter">Faltam escolher: ${modalMax}</p>`;
                 html += `<div class="space-y-3">`;
                 FLAVORS.esfihas.forEach((f, idx) => {
-                    const isUnavailable = state.settings.unavailable_flavors.includes(f.name);
+                    const isUnavailable = state.settings.unavailable_flavors.includes(`esfiha_${f.name}`) || state.settings.unavailable_flavors.includes(f.name);
                     html += `
                         <div class="flex justify-between items-center p-2 border rounded ${isUnavailable ? 'bg-gray-100 opacity-50' : 'bg-white'}">
                             <span class="font-bold text-gray-700">${f.name} ${isUnavailable ? '<small class="text-red-500">(Esgotado)</small>' : ''}</span>
@@ -1068,7 +1068,7 @@
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 border rounded mb-4">
                         ${[...FLAVORS.salgadas, ...FLAVORS.doces].map(f => `
                             <label class="flex items-center space-x-2 text-sm cursor-pointer">
-                                <input type="checkbox" class="flavor-unavailable-chk" value="${f.name}" ${state.settings.unavailable_flavors.includes(f.name) ? 'checked' : ''}>
+                                <input type="checkbox" class="flavor-unavailable-chk" value="pizza_${f.name}" ${state.settings.unavailable_flavors.includes(`pizza_${f.name}`) || state.settings.unavailable_flavors.includes(f.name) ? 'checked' : ''}>
                                 <span class="truncate" title="${f.name}">${f.name}</span>
                             </label>
                         `).join('')}
@@ -1078,7 +1078,7 @@
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 border rounded">
                         ${FLAVORS.esfihas.map(f => `
                             <label class="flex items-center space-x-2 text-sm cursor-pointer">
-                                <input type="checkbox" class="flavor-unavailable-chk" value="${f.name}" ${state.settings.unavailable_flavors.includes(f.name) ? 'checked' : ''}>
+                                <input type="checkbox" class="flavor-unavailable-chk" value="esfiha_${f.name}" ${state.settings.unavailable_flavors.includes(`esfiha_${f.name}`) || state.settings.unavailable_flavors.includes(f.name) ? 'checked' : ''}>
                                 <span class="truncate" title="${f.name}">${f.name}</span>
                             </label>
                         `).join('')}
