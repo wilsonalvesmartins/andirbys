@@ -646,6 +646,47 @@
             if(p) p.classList.add('hidden');
             if(val === 'Dinheiro') if(t) t.classList.remove('hidden');
             if(val === 'PIX') if(p) p.classList.remove('hidden');
+            
+            updateTotals(); // Atualiza os valores assim que troca a forma de pagamento
+        };
+
+        window.updateTotals = function() {
+            let subtotal = state.cart.reduce((acc, item) => acc + item.price, 0);
+            let delivery_fee = checkoutState.type === 'delivery' ? state.settings.delivery_fee : 0;
+            
+            let card_fee = 0;
+            const pm = document.getElementById('payment_method') ? document.getElementById('payment_method').value : 'PIX';
+            
+            // Adiciona R$ 3 por pizza Gigante e R$ 2 por Família se o pagamento for no cartão
+            if (pm.includes('Cartão')) {
+                state.cart.forEach(item => {
+                    const name = item.name.toLowerCase();
+                    if (name.includes('gigante')) card_fee += 3;
+                    else if (name.includes('família') || name.includes('familia')) card_fee += 2;
+                });
+            }
+
+            let total = subtotal + delivery_fee + card_fee;
+
+            const subEl = document.getElementById('summary-subtotal');
+            if(subEl) subEl.innerText = formatMoney(subtotal);
+            
+            const devEl = document.getElementById('summary-delivery');
+            if(devEl) devEl.innerText = formatMoney(delivery_fee);
+            
+            const cardContainer = document.getElementById('summary-card-fee-container');
+            const cardEl = document.getElementById('summary-card-fee');
+            if(cardContainer && cardEl) {
+                if (card_fee > 0) {
+                    cardContainer.classList.remove('hidden');
+                    cardEl.innerText = formatMoney(card_fee);
+                } else {
+                    cardContainer.classList.add('hidden');
+                }
+            }
+
+            const totEl = document.getElementById('summary-total');
+            if(totEl) totEl.innerText = formatMoney(total);
         };
 
         window.copyPix = function() {
@@ -658,7 +699,8 @@
 
         function renderCheckout() {
             let subtotal = state.cart.reduce((acc, item) => acc + item.price, 0);
-            let total = checkoutState.type === 'delivery' ? subtotal + state.settings.delivery_fee : subtotal;
+            let delivery_fee = checkoutState.type === 'delivery' ? state.settings.delivery_fee : 0;
+            let total = subtotal + delivery_fee;
 
             return `
                 <h2 class="text-2xl font-black text-andirby-red mb-6">Finalização</h2>
@@ -691,11 +733,9 @@
                             </label>
                         </div>
                         
-                        ${checkoutState.type === 'delivery' ? `
-                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                                <p class="text-sm text-blue-800 font-bold flex items-center gap-2">⏱️ Prazo estimado de entrega: ${state.settings.delivery_time || '40 minutos'}</p>
-                            </div>
-                        ` : ''}
+                        <div id="delivery-time-container" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 ${checkoutState.type === 'pickup' ? 'hidden' : ''}">
+                            <p class="text-sm text-blue-800 font-bold flex items-center gap-2">⏱️ Prazo estimado de entrega: ${state.settings.delivery_time || '40 minutos'}</p>
+                        </div>
 
                         <div id="address-container" class="${checkoutState.type === 'pickup' ? 'hidden' : ''}">
                             <label class="block text-sm font-bold text-gray-700 mb-1">Endereço Completo</label>
@@ -737,15 +777,21 @@
 
                     <div class="bg-gray-900 text-white rounded-lg shadow-sm p-5 border-l-4 border-andirby-yellow">
                         <h3 class="font-black text-lg mb-4 border-b border-gray-700 pb-2 text-andirby-yellow">Resumo</h3>
+                        
                         <div class="flex justify-between mb-2 text-gray-300">
-                            <span>Subtotal:</span><span>${formatMoney(subtotal)}</span>
+                            <span>Subtotal:</span><span id="summary-subtotal">${formatMoney(subtotal)}</span>
                         </div>
-                        ${checkoutState.type === 'delivery' ? `
-                        <div class="flex justify-between mb-2 text-gray-300">
-                            <span>Taxa de Entrega:</span><span>${formatMoney(state.settings.delivery_fee)}</span>
-                        </div>` : ''}
+                        
+                        <div id="summary-delivery-container" class="flex justify-between mb-2 text-gray-300 ${checkoutState.type === 'pickup' ? 'hidden' : ''}">
+                            <span>Taxa de Entrega:</span><span id="summary-delivery">${formatMoney(delivery_fee)}</span>
+                        </div>
+                        
+                        <div id="summary-card-fee-container" class="flex justify-between mb-2 text-red-400 hidden font-bold">
+                            <span>Taxa de Cartão:</span><span id="summary-card-fee">R$ 0,00</span>
+                        </div>
+                        
                         <div class="flex justify-between mt-4 text-2xl font-black text-green-400">
-                            <span>Total:</span><span>${formatMoney(total)}</span>
+                            <span>Total:</span><span id="summary-total">${formatMoney(total)}</span>
                         </div>
                         
                         <p class="text-xs text-gray-400 mt-4 italic">Observação: O valor do frete é referente à cidade. Localidades rurais e fora de Cajuru/SP terão taxa extra a combinar.</p>
@@ -773,7 +819,27 @@
             } catch(e) {}
         }
 
-        function updateCheckoutType(type) { checkoutState.type = type; render(); }
+        window.updateCheckoutType = function(type) { 
+            checkoutState.type = type; 
+            const addrContainer = document.getElementById('address-container');
+            const timeContainer = document.getElementById('delivery-time-container');
+            const sumDevContainer = document.getElementById('summary-delivery-container');
+            const addrInput = document.getElementById('address');
+            
+            // Troca o status visualmente sem recarregar a tela, protegendo as observações escritas
+            if (type === 'pickup') {
+                if(addrContainer) addrContainer.classList.add('hidden');
+                if(timeContainer) timeContainer.classList.add('hidden');
+                if(sumDevContainer) sumDevContainer.classList.add('hidden');
+                if(addrInput) addrInput.removeAttribute('required');
+            } else {
+                if(addrContainer) addrContainer.classList.remove('hidden');
+                if(timeContainer) timeContainer.classList.remove('hidden');
+                if(sumDevContainer) sumDevContainer.classList.remove('hidden');
+                if(addrInput) addrInput.setAttribute('required', 'true');
+            }
+            updateTotals();
+        };
 
         async function submitOrder(e) {
             e.preventDefault();
@@ -782,13 +848,27 @@
             const obs = document.getElementById('observations') ? document.getElementById('observations').value : '';
             const itemsPayload = [...state.cart];
             if (obs.trim() !== '') {
-                itemsPayload.push({ type: 'simple', name: "Observações do Pedido", details: obs.trim(), price: 0 });
+                itemsPayload.push({ type: 'simple', name: "Observações do Cliente", details: obs.trim(), price: 0 });
             }
 
             let paymentMethod = document.getElementById('payment_method').value;
             if(paymentMethod === 'Dinheiro') {
                 const troco = document.getElementById('troco_input').value;
                 if(troco.trim() !== '') paymentMethod += ` (Troco para R$ ${troco})`;
+            }
+
+            // Calcula taxa de cartão na hora de finalizar o pedido para o cupom
+            let card_fee = 0;
+            if (paymentMethod.includes('Cartão')) {
+                state.cart.forEach(item => {
+                    const name = item.name.toLowerCase();
+                    if (name.includes('gigante')) card_fee += 3;
+                    else if (name.includes('família') || name.includes('familia')) card_fee += 2;
+                });
+            }
+            
+            if (card_fee > 0) {
+                itemsPayload.push({ type: 'fee', name: "Taxa de Máquina (Cartão)", details: "", price: card_fee });
             }
 
             const payload = {
@@ -798,7 +878,7 @@
                 type: checkoutState.type === 'delivery' ? 'Entrega' : 'Retirada',
                 paymentMethod: paymentMethod,
                 items: itemsPayload,
-                subtotal: state.cart.reduce((a, i) => a + i.price, 0),
+                subtotal: state.cart.reduce((a, i) => a + i.price, 0) + card_fee,
                 delivery_fee: checkoutState.type === 'delivery' ? state.settings.delivery_fee : 0,
             };
             payload.total = payload.subtotal + payload.delivery_fee;
