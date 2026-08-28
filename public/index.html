@@ -223,7 +223,7 @@
                 </div>`;
             
             const categories = [...new Set(state.items.filter(i => i.category !== 'Bordas Recheadas').map(i => i.category))];
-            const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Pizza no Prato', 'Esfihas', 'Porções', 'Outros', 'Bebidas'];
+            const catOrder = ['Pizzas Gigantes (50cm)', 'Pizzas Família (35cm)', 'Pizza Brotinho', 'Pizza no Prato', 'Esfihas', 'Porções', 'Outros', 'Bebidas'];
             categories.sort((a, b) => {
                 let idxA = catOrder.findIndex(c => a.includes(c)); let idxB = catOrder.findIndex(c => b.includes(c));
                 if(idxA === -1) idxA = 99; if(idxB === -1) idxB = 99;
@@ -457,7 +457,7 @@
             showExtrasModal();
         }
 
-        // --- NOVO: MODAL DE EXTRAS (Borda e Observações) ---
+        // --- MODAL DE EXTRAS (Borda e Observações) ---
         function showExtrasModal() {
             document.getElementById('extras-subtitle').innerText = state.modalItem.name;
             let html = '';
@@ -471,6 +471,8 @@
                     bordas = bordas.filter(b => b.name.toLowerCase().includes('gigante'));
                 } else if(nameLower.includes('família') || catLower.includes('família')) {
                     bordas = bordas.filter(b => b.name.toLowerCase().includes('família'));
+                } else {
+                    bordas = []; // [NOVO] Bloqueia e esconde a borda caso seja Brotinho ou Prato
                 }
 
                 if(bordas.length > 0) {
