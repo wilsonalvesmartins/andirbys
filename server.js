@@ -96,6 +96,9 @@ async function initDB() {
             ['Pizzas Família (35cm)', '3 Sabores (2 Salgadas e 1 Doce)', 64.00],
             ['Pizza no Prato', '1 Sabor', 28.00],
             ['Pizza no Prato', '2 Sabores', 33.00],
+            ['Pizza Brotinho', '1 Sabor (Salgada)', 30.00],
+            ['Pizza Brotinho', '2 Sabores (Salgadas)', 35.00],
+            ['Pizza Brotinho', '2 Sabores (Salgada e Doce)', 40.00],
             ['Bordas Recheadas', 'Borda Gigante 50cm', 16.00],
             ['Bordas Recheadas', 'Borda Família 35cm', 14.00],
             ['Esfihas', '1 Unidade', 5.00],
@@ -106,6 +109,19 @@ async function initDB() {
         ];
         for (let item of initialItems) {
             await run(`INSERT INTO items (category, name, price) VALUES (?, ?, ?)`, item);
+        }
+    } else {
+        // [NOVO] Migration: Adiciona automaticamente a Pizza Brotinho caso a base de dados seja antiga
+        const hasBrotinho = await get(`SELECT * FROM items WHERE category = 'Pizza Brotinho' LIMIT 1`);
+        if (!hasBrotinho) {
+            const brotinhoItems = [
+                ['Pizza Brotinho', '1 Sabor (Salgada)', 30.00],
+                ['Pizza Brotinho', '2 Sabores (Salgadas)', 35.00],
+                ['Pizza Brotinho', '2 Sabores (Salgada e Doce)', 40.00]
+            ];
+            for (let item of brotinhoItems) {
+                await run(`INSERT INTO items (category, name, price) VALUES (?, ?, ?)`, item);
+            }
         }
     }
 }
